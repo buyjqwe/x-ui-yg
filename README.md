@@ -7,3 +7,5 @@ bash <(wget -qO- https://raw.githubusercontent.com/buyjqwe/x-ui-yg/main/install.
 ```
 bash <(curl -Ls https://raw.githubusercontent.com/buyjqwe/x-ui-yg/main/install.sh)
 ```
+bash <(curl -Ls https://raw.githubusercontent.com/buyjqwe/x-ui-yg/main/singbox.sh)
+```

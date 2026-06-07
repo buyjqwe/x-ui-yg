@@ -9,6 +9,7 @@
 #    2. 零外部 Web 依赖 (无 Nginx/Python)，Sing-Box 自行托管 Web 面板
 #    3. 自动安装最现代化的 MetaCubeXD 极简美学控制台
 #    4. 支持安全密钥 (Secret) 验证，保障面板不被非法扫描
+#    5. 完美兼容 OpenVZ、LXC 等限制型虚拟化平台，自带一键诊断修复工具
 # ====================================================================
 
 export LANG=en_US.UTF-8
@@ -83,6 +84,36 @@ get_latest_version() {
     VERSION_NUM="${LATEST_VER#v}"
 }
 
+# 部署静态面板资源 (高可靠精准提取算法)
+deploy_web_ui() {
+    local temp_dir="$1"
+    info "正在部署现代化 Web 控制面板 (MetaCubeXD)..."
+    UI_URL="https://github.com/MetaCubeX/MetaCubeXD/archive/refs/heads/gh-pages.zip"
+    
+    if ! wget -q --show-progress -O "${temp_dir}/panel.zip" "$UI_URL"; then
+        warn "下载主控制面板失败，正在尝试使用备用 Yacd 极简控制台..."
+        UI_URL="https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip"
+        if ! wget -q --show-progress -O "${temp_dir}/panel.zip" "$UI_URL"; then
+            error "控制面板资源全部下载失败，请检查服务器网络。"
+            return 1
+        fi
+    fi
+
+    unzip -q "${temp_dir}/panel.zip" -d "$temp_dir"
+    rm -rf "${SB_UI_DIR:?}"/*
+    
+    # 动态递归定位解压目录中 index.html 所在的真实根目录
+    local real_src_dir=$(find "$temp_dir" -name "index.html" -exec dirname {} \; | head -n 1)
+    if [[ -n "$real_src_dir" && -d "$real_src_dir" ]]; then
+        cp -r "$real_src_dir"/* "$SB_UI_DIR/"
+        success "Web 面板静态资源已成功高可靠部署至: $SB_UI_DIR"
+        return 0
+    else
+        error "解压后的目录中未找到关键引导主页 index.html！"
+        return 1
+    fi
+}
+
 # 部署并构建 Web 控制面板
 install_singbox() {
     detect_env
@@ -105,28 +136,15 @@ install_singbox() {
     fi
 
     tar -zxf "${TEMP_DIR}/sing-box.tar.gz" -C "$TEMP_DIR"
-    cp $(find "$TEMP_DIR" -type f -name "sing-box") "$SB_BIN"
+    cp $(find "$TEMP_DIR" -type f -name "sing-box" | head -n 1) "$SB_BIN"
     chmod +x "$SB_BIN"
     success "Sing-Box 主程序已成功部署至 $SB_BIN"
 
-    # 下载并部署 MetaCubeXD 面板
-    info "正在下载现代化 Web 控制面板 (MetaCubeXD)..."
-    UI_URL="https://github.com/MetaCubeX/MetaCubeXD/archive/refs/heads/gh-pages.zip"
-    
-    if ! wget -q --show-progress -O "${TEMP_DIR}/panel.zip" "$UI_URL"; then
-        error "下载 Web 面板失败，正在尝试备用 Yacd 极简控制台..."
-        UI_URL="https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip"
-        wget -q --show-progress -O "${TEMP_DIR}/panel.zip" "$UI_URL"
-    fi
+    # 部署网页静态面板
+    deploy_web_ui "$TEMP_DIR"
 
-    unzip -q "${TEMP_DIR}/panel.zip" -d "$TEMP_DIR"
-    # 清空并覆盖本地 UI 目录
-    rm -rf "${SB_UI_DIR:?}"/*
-    cp -r $(find "$TEMP_DIR" -maxdepth 2 -type d -name "*gh-pages" | head -n 1)/* "$SB_UI_DIR/"
-    
     # 清理临时工作区
     rm -rf "$TEMP_DIR"
-    success "Web 面板静态资源已成功解压部署至: $SB_UI_DIR"
 
     # 引导用户输入 Web 面板配置
     echo "--------------------------------------------------"
@@ -183,8 +201,8 @@ install_singbox() {
 EOF
     success "Sing-Box 纯净配置文件已生成: $SB_CONFIG"
 
-    # 注册 Systemd 守护进程
-    info "正在配置开机自启系统守护进程..."
+    # 注册 Systemd 守护进程 (移除导致 OpenVZ/LXC 启动失败的 Capability sandboxing Directive)
+    info "正在配置自适应 Systemd 守护服务..."
     cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
 Description=sing-box service
@@ -192,8 +210,8 @@ Documentation=https://sing-box.sagernet.org
 After=network.target nss-lookup.target
 
 [Service]
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+Type=simple
+User=root
 ExecStart=${SB_BIN} run -c ${SB_CONFIG}
 WorkingDirectory=${SB_DIR}
 Restart=always
@@ -206,7 +224,7 @@ EOF
 
     systemctl daemon-reload >/dev/null 2>&1
     systemctl enable sing-box >/dev/null 2>&1
-    systemctl start sing-box >/dev/null 2>&1
+    systemctl restart sing-box >/dev/null 2>&1
 
     # 自动开启防火墙端口 (如有必要)
     if systemctl is-active --quiet firewalld 2>/dev/null; then
@@ -232,6 +250,121 @@ EOF
     echo -e "4. 📂 配置文件路径: ${BLUE}${SB_CONFIG}${PLAIN}"
     echo -e "5. 📁 静态面板资源目录: ${BLUE}${SB_UI_DIR}${PLAIN}"
     echo -e "${GREEN}==================================================${PLAIN}\n"
+}
+
+# 自动诊断核心启动失败原因并执行自我修复
+diagnose_failures() {
+    info "正在启动一键诊断程序..."
+    sleep 1
+
+    # 1. 验证主程序是否存在
+    if [ ! -f "$SB_BIN" ]; then
+        error "检测失败：主二进制程序 $SB_BIN 不存在，请执行选项 1 重新安装。"
+        return 1
+    fi
+    chmod +x "$SB_BIN"
+
+    # 2. 验证二进制可用性 (防止 CPU 架构错误导致执行异常)
+    if ! "$SB_BIN" version >/dev/null 2>&1; then
+        error "主程序加载异常！该二进制程序无法在当前的 CPU 架构或系统环境下执行。"
+        warn "可能原因：系统架构不兼容，或当前系统缺少标准 C 动态运行库库依赖。"
+        return 1
+    fi
+
+    # 3. 验证 JSON 语法
+    if [ ! -f "$SB_CONFIG" ]; then
+        error "配置文件 $SB_CONFIG 缺失。"
+        return 1
+    fi
+
+    info "正在对配置文件进行格式与语法完整性校验..."
+    local check_output
+    check_output=$("$SB_BIN" check -c "$SB_CONFIG" 2>&1)
+    if [ $? -ne 0 ]; then
+        error "校验未通过！配置文件中存在格式或参数类型错误，具体诊断如下："
+        echo -e "${RED}${check_output}${PLAIN}"
+        return 1
+    else
+        success "配置文件 JSON 校验完成，未发现语法缺陷。"
+    fi
+
+    # 4. 检查静态 Web 资源
+    if [ ! -f "${SB_UI_DIR}/index.html" ]; then
+        warn "静态网页资源文件夹为空，或缺少 index.html，这可能会导致服务异常退出。"
+        info "正在尝试重新修复网页资源下载..."
+        local re_temp=$(mktemp -d)
+        deploy_web_ui "$re_temp"
+        rm -rf "$re_temp"
+    fi
+
+    # 5. 排查端口抢占
+    local web_port=$(jq -r '.experimental.clash_api.external_controller' "$SB_CONFIG" 2>/dev/null | cut -d':' -f2)
+    local mixed_port=$(jq -r '.inbounds[0].listen_port' "$SB_CONFIG" 2>/dev/null)
+    
+    if [[ -n "$web_port" && -n "$mixed_port" ]]; then
+        info "正在检索系统中运行的端口是否与当前端口产生冲突..."
+        local port_conflict=0
+        if command -v ss &>/dev/null; then
+            if ss -tunlp | grep -q ":${web_port} "; then
+                error "端口 ${web_port} 已被服务器上其他服务抢占，导致核心无法启动！"
+                port_conflict=1
+            fi
+            if ss -tunlp | grep -q ":${mixed_port} "; then
+                error "混合监听端口 ${mixed_port} 已被其他进程绑定！"
+                port_conflict=1
+            fi
+        fi
+
+        if [ $port_conflict -eq 1 ]; then
+            info "修复方案：请使用菜单选项 5 将端口变更为目前未使用的空闲端口。"
+            return 1
+        fi
+    fi
+
+    # 6. 前台测试与重构 Systemd
+    info "正在进行前台运行环境试跑分析以获取深层报错..."
+    local temp_run_log="/tmp/sb_dry.log"
+    timeout 3 "$SB_BIN" run -c "$SB_CONFIG" > "$temp_run_log" 2>&1
+    local run_status=$?
+
+    # 124 代表 timeout 命令由于时间到正常退出，说明服务前台拉起一切正常
+    if [ $run_status -eq 124 ]; then
+        success "前台环境试跑验证成功，未返回致命异常代码。"
+        info "确认是 Systemd 虚拟化配置兼容性引起，正在重构 Systemd 守护逻辑并修复权限..."
+        
+        # 强制重写极简开机启动
+        cat > /etc/systemd/system/sing-box.service <<EOF
+[Unit]
+Description=sing-box service
+Documentation=https://sing-box.sagernet.org
+After=network.target nss-lookup.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=${SB_BIN} run -c ${SB_CONFIG}
+WorkingDirectory=${SB_DIR}
+Restart=always
+RestartSec=5
+LimitN_FILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload
+        systemctl restart sing-box
+        sleep 2
+        
+        if systemctl is-active --quiet sing-box; then
+            success "恭喜！Sing-Box 服务已成功重构修复，并正常启动成功。"
+        else
+            error "服务修复应用后依然未能按预期成功拉起，请使用选项 4 获取实时系统日志。"
+        fi
+    else
+        error "核心启动阶段返回了致命错误，报错日志如下："
+        cat "$temp_run_log"
+    fi
+    rm -f "$temp_run_log"
 }
 
 # 卸载功能
@@ -323,6 +456,7 @@ show_menu() {
     echo -e " 3. 管理 Sing-Box 服务的 运行/停止/重启"
     echo -e " 4. 实时查看 Sing-Box 核心系统运行日志"
     echo -e " 5. 变更 面板端口 / 安全密钥 (Secret) / 代理监听"
+    echo -e " 6. 🛠️ 一键诊断核心启动失败原因并执行自动修复"
     echo -e "--------------------------------------------------"
     echo -e " 0. 退出脚本"
     echo -e "${PURPLE}==================================================${PLAIN}"
@@ -332,25 +466,26 @@ show_menu() {
         if systemctl is-active --quiet sing-box; then
             echo -e "当前核心状态: ${GREEN}运行中 (Active)${PLAIN}"
             # 动态获取配置文件中的 Web 控制器端口和 Secret
-            local cur_port=$(jq -r '.experimental.clash_api.external_controller' "$SB_CONFIG" | cut -d':' -f2)
-            local cur_secret=$(jq -r '.experimental.clash_api.secret' "$SB_CONFIG")
+            local cur_port=$(jq -r '.experimental.clash_api.external_controller' "$SB_CONFIG" 2>/dev/null | cut -d':' -f2)
+            local cur_secret=$(jq -r '.experimental.clash_api.secret' "$SB_CONFIG" 2>/dev/null)
             echo -e "面板访问路径: ${BLUE}http://服务器IP:${cur_port}/ui/${PLAIN}"
             echo -e "当前访问密钥: ${PURPLE}${cur_secret}${PLAIN}"
         else
-            echo -e "当前核心状态: ${YELLOW}未运行 (Stopped)${PLAIN}"
+            echo -e "当前核心状态: ${RED}未运行 (Stopped)${PLAIN}"
         fi
     else
         echo -e "当前核心状态: ${RED}未安装${PLAIN}"
     fi
     echo "=================================================="
     
-    readp "请输入您的选择 [0-5]: " main_choice
+    readp "请输入您的选择 [0-6]: " main_choice
     case "$main_choice" in
         1) install_singbox ;;
         2) uninstall_singbox ;;
         3) manage_service ;;
         4) show_logs ;;
         5) change_settings ;;
+        6) diagnose_failures ;;
         0) exit 0 ;;
         *) error "输入错误，请重新选择！" && sleep 1 && show_menu ;;
     esac

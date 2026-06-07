@@ -504,14 +504,18 @@ HTML_CONTENT = """<!DOCTYPE html>
 
                 <!-- Reality TLS -->
                 <div id="subSectionReality" class="space-y-3 hidden">
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-2">
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">目标服务器 SNI 域名 (如 mozilla)</label>
-                            <input type="text" id="realitySni" value="addons.mozilla.org" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <label class="block text-xs text-slate-400 mb-1">SNI 域名</label>
+                            <input type="text" id="realitySni" value="addons.mozilla.org" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">目标握手端口</label>
-                            <input type="number" id="realityPort" value="443" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <label class="block text-xs text-slate-400 mb-1">目标握手服务器</label>
+                            <input type="text" id="realityServer" value="addons.mozilla.org" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">端口</label>
+                            <input type="number" id="realityPort" value="443" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none">
                         </div>
                     </div>
                     <div>
@@ -1881,7 +1885,7 @@ action_diagnose() {
         fi
         success ">> 网络端口占用安全校验通过。"
     else
-        warn ">> 提示：当前系统未预装 ss 网络工具，跳过物理端口排查。"
+        warn ">> 提示：当前系统未预装 ss network 工具，跳过物理端口排查。"
     fi
 
     # 5. 系统自适应服务重新初始化
@@ -2016,18 +2020,54 @@ EOF
 # 启动一键部署流程
 detect_os
 install_deps
-deploy_web_ui() {
-    # 如果以前有旧原生 ui 目录则保留，在这里我们直接初始化 config.json 默认不配置抢占
-    if [ ! -f "$SB_CONFIG" ]; then
-        # 生成一个无端口冲突的最简基础合规配置文件
-        cat > "$SB_CONFIG" <<EOF
+get_latest_version
+
+# 创建配置与运行目录
+mkdir -p "$SB_DIR"
+
+# 1. 检测并部署 Sing-Box 核心主程序二进制文件
+if [ ! -f "$SB_BIN" ]; then
+    info "未检测到已安装的 Sing-Box 主程序，开始下载并安装..."
+    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/${LATEST_VER}/sing-box-${VERSION_NUM}-linux-${ARCH}.tar.gz"
+    TEMP_DIR=$(mktemp -d)
+    if wget -q --show-progress -O "${TEMP_DIR}/sing-box.tar.gz" "$DOWNLOAD_URL"; then
+        tar -zxf "${TEMP_DIR}/sing-box.tar.gz" -C "$TEMP_DIR"
+        cp $(find "$TEMP_DIR" -type f -name "sing-box" | head -n 1) "$SB_BIN"
+        chmod +x "$SB_BIN"
+        success "Sing-Box 核心程序成功安装至: $SB_BIN"
+    else
+        error "下载 Sing-Box 核心程序失败，请自检网络连接。"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    rm -rf "$TEMP_DIR"
+fi
+
+# 2. 检查并初始化纯净且符合规范的 config.json
+if [ ! -f "$SB_CONFIG" ]; then
+    info "未检测到旧的配置文件，正在生成最简合规基础 config.json..."
+    
+    # 随机生成一个安全的 Shadowsocks 密码并选定随机端口
+    AUTO_SS_PWD=$(openssl rand -base64 16 2>/dev/null | tr -d '\n\r' || head -c 16 /dev/urandom | base64 | tr -d '\n\r')
+    SS_PORT=$(shuf -i 10000-60000 -n 1)
+    
+    cat > "$SB_CONFIG" <<EOF
 {
   "log": {
     "disabled": false,
     "level": "info",
     "timestamp": true
   },
-  "inbounds": [],
+  "inbounds": [
+    {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "::",
+      "listen_port": ${SS_PORT},
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "${AUTO_SS_PWD}"
+    }
+  ],
   "outbounds": [
     {
       "type": "direct",
@@ -2036,14 +2076,30 @@ deploy_web_ui() {
   ]
 }
 EOF
-    fi
-}
-deploy_web_ui
+    success "默认基础配置文件初始化成功: $SB_CONFIG"
+fi
+
+# 3. 部署 Web 面板后台程序与服务守护
 deploy_dashboard_service
 setup_system_service
 create_sb_shortcut
 
-# 最后直接调起一次面板
-success "Web 表单自托管控制面板服务安装并重构成功！"
-sleep 1
+# 获取外部访问 IP 以及面板登录账密提示
+external_ip=$(curl -s4m5 icanhazip.com || curl -s4m5 api.ipify.org || echo "YOUR_SERVER_IP")
+web_port=$(jq -r '.port' "$SB_CREDS_FILE" 2>/dev/null || echo 9527)
+web_user=$(jq -r '.username' "$SB_CREDS_FILE" 2>/dev/null || echo "admin")
+web_pass=$(jq -r '.password' "$SB_CREDS_FILE" 2>/dev/null || echo "adminSecret88")
+
+echo -e "\n${GREEN}==================================================${PLAIN}"
+echo -e "${GREEN}      🎉 Sing-Box 核心与可视化控制面板服务安装成功！${PLAIN}"
+echo -e "=================================================="
+echo -e "1. 💻 Web 面板登录地址  : ${BLUE}http://${external_ip}:${web_port}/ui/${PLAIN}"
+echo -e "2. 🔑 面板管理员账号    : ${PURPLE}${web_user}${PLAIN}"
+echo -e "3. 🔑 面板安全通信密码  : ${PURPLE}${web_pass}${PLAIN}"
+echo -e "--------------------------------------------------"
+echo -e "💡 温馨提示: 终端随时输入 ${GREEN}sb${PLAIN} 即可调出全功能管理面板！"
+echo -e "${GREEN}==================================================${PLAIN}\n"
+sleep 2
+
+# 启动面板交互命令行
 exec "$SB_SHORTCUT"

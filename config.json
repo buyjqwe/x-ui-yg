@@ -1,0 +1,925 @@
+{
+  "log": null,
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "inboundTag": [
+          "api"
+        ],
+        "outboundTag": "api",
+        "type": "field"
+      },
+      {
+        "type": "field",
+        "port": "443",
+        "network": "udp",
+        "outboundTag": "blocked"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "www.gstatic.com"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "ip": [
+          "geoip:cn"
+        ],
+        "outboundTag": "blocked",
+        "type": "field"
+      },
+      {
+        "outboundTag": "blocked",
+        "protocol": [
+          "bittorrent"
+        ],
+        "type": "field"
+      },
+      {
+        "type": "field",
+        "outboundTag": "xray-wg-warp-v4",
+        "domain": [
+          "ifconfig.co",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "xray-wg-warp-v6",
+        "domain": [
+          "ipget.net",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "socks5-warp-v4",
+        "domain": [
+          "db-ip.com",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "socks5-warp-v6",
+        "domain": [
+          "ip.me",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "socks5-aimili-v4",
+        "domain": [
+          "ip.sb",
+          "aimili-route.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "vps-outbound-v4",
+        "domain": [
+          "api.myip.com",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "vps-outbound-v6",
+        "domain": [
+          "api64.ipify.org",
+          "yg-kkk.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "network": "udp,tcp"
+      }
+    ]
+  },
+  "dns": null,
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": 10808,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": true
+      },
+      "streamSettings": null,
+      "tag": "socks-in",
+      "sniffing": null
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 62789,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "streamSettings": null,
+      "tag": "api",
+      "sniffing": null
+    },
+    {
+      "listen": null,
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "0e4f9d17-cdf6-4600-ab6f-edc5e26352d3",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-8443",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "12e9e45a-01a3-498d-e331-7a3dfe461eed",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "U129.BIU135.EU.ORG",
+          "rejectUnknownSni": false,
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "",
+          "certificates": [
+            {
+              "ocspStapling": 3600,
+              "certificate": [
+                "-----BEGIN CERTIFICATE-----",
+                "MIIEpjCCA46gAwIBAgIUG+cOY6ECiIcgOlvIRhxiyT8XPdQwDQYJKoZIhvcNAQE                                                                                                 L",
+                "BQAwgYsxCzAJBgNVBAYTAlVTMRkwFwYDVQQKExBDbG91ZEZsYXJlLCBJbmMuMTQ                                                                                                 w",
+                "MgYDVQQLEytDbG91ZEZsYXJlIE9yaWdpbiBTU0wgQ2VydGlmaWNhdGUgQXV0aG9                                                                                                 y",
+                "aXR5MRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMRMwEQYDVQQIEwpDYWxpZm9ybml                                                                                                 h",
+                "MB4XDTI1MDIyODAxMTAwMFoXDTQwMDIyNTAxMTAwMFowYjEZMBcGA1UEChMQQ2x                                                                                                 v",
+                "dWRGbGFyZSwgSW5jLjEdMBsGA1UECxMUQ2xvdWRGbGFyZSBPcmlnaW4gQ0ExJjA                                                                                                 k",
+                "BgNVBAMTHUNsb3VkRmxhcmUgT3JpZ2luIENlcnRpZmljYXRlMIIBIjANBgkqhki                                                                                                 G",
+                "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuH1uyo0VJYkTxIKlUT30+848XXbkdbRLXFj                                                                                                 P",
+                "7dfhVmDFFAQsoKuz/5oVky17aEVISBi/Ji+6EdVcVn7Iek1k4W2MOib8UlToj0S                                                                                                 S",
+                "B1Mbeosx2hnahgk1E7T5b8Zv+lNEGgJ2dAPqwNlqx+G50YHvEDUxicVe+mQF/dV                                                                                                 H",
+                "0SVeZD2Ebm9sz9LSg8T0VpLnz5fQdeEKiMzu5spqs7fV/HdzdIJO42824AkUlX1                                                                                                 5",
+                "tjz1n1vYGm+h3gcz0gJGz/ukqI4MCzozl6VHy8VqvHm5bl/sgIegwgE+QaNXQw3                                                                                                 1",
+                "idmL1v++KhC17KSK2nzuT427D8NIlTDTPRfOBTPYdED0XqaLNQIDAQABo4IBKDC                                                                                                 C",
+                "ASQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQc                                                                                                 D",
+                "ATAMBgNVHRMBAf8EAjAAMB0GA1UdDgQWBBRRImFTLcOAq7zkQGWsCoiHneKfNjA                                                                                                 f",
+                "BgNVHSMEGDAWgBQk6FNXXXw0QIep65TbuuEWePwppDBABggrBgEFBQcBAQQ0MDI                                                                                                 w",
+                "MAYIKwYBBQUHMAGGJGh0dHA6Ly9vY3NwLmNsb3VkZmxhcmUuY29tL29yaWdpbl9                                                                                                 j",
+                "YTApBgNVHREEIjAggg8qLmJpdTEzNS5ldS5vcmeCDWJpdTEzNS5ldS5vcmcwOAY                                                                                                 D",
+                "VR0fBDEwLzAtoCugKYYnaHR0cDovL2NybC5jbG91ZGZsYXJlLmNvbS9vcmlnaW5                                                                                                 f",
+                "Y2EuY3JsMA0GCSqGSIb3DQEBCwUAA4IBAQB3xX9gEsjC+yOfMAcKmyPv8u9ALo+                                                                                                 +",
+                "jAf3Re/qi/cQoKo6VH+0JQ8Km+HzMdwQiQX48kZvAE7AFpE6ajPGsMYaSfC+DHb                                                                                                 o",
+                "WIDlL2sMEJzDDBmVxO9kuP8aDwElXxO7D2VWsprT2j0Vti37dAA15swvoOT9CxX                                                                                                 c",
+                "f0zOr1EY7LO+fawXOkggivbFAG+RPa3JikcOYymhyGgSKBCx0UmMEVwZxoWl+7i                                                                                                 w",
+                "/v8e8x84BqiOpif8ncJ1U/6JvMdnnDunLwW2P8wHjmOozQIg1YMeuB7tZg7E/pl                                                                                                 j",
+                "ShJvHLlyydKmVZQn325zNREs2IlzC20VFFqPCxVdqDuqUDQBlbF67HH7",
+                "-----END CERTIFICATE-----"
+              ],
+              "key": [
+                "-----BEGIN PRIVATE KEY-----",
+                "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4fW7KjRUliRP                                                                                                 E",
+                "gqVRPfT7zjxdduR1tEtcWM/t1+FWYMUUBCygq7P/mhWTLXtoRUhIGL8mL7oR1Vx                                                                                                 W",
+                "fsh6TWThbYw6JvxSVOiPRJIHUxt6izHaGdqGCTUTtPlvxm/6U0QaAnZ0A+rA2Wr                                                                                                 H",
+                "4bnRge8QNTGJxV76ZAX91UfRJV5kPYRub2zP0tKDxPRWkufPl9B14QqIzO7mymq                                                                                                 z",
+                "t9X8d3N0gk7jbzbgCRSVfXm2PPWfW9gab6HeBzPSAkbP+6SojgwLOjOXpUfLxWq                                                                                                 8",
+                "ebluX+yAh6DCAT5Bo1dDDfWJ2YvW/74qELXspIrafO5PjbsPw0iVMNM9F84FM9h                                                                                                 0",
+                "QPRepos1AgMBAAECggEAEHHQeVTgCKt89pbf84DpSwn+uXoKh9oH9Er6UGyzaka                                                                                                 l",
+                "P9Erb9ro6CSs6E81Nn3Odpa2Gx+an1JRsRK1/f4outX6mjMKv1qlgXe5kyuQ7Hh                                                                                                 n",
+                "JitdyMrIpLa3RoOn9uaLJc0IZUj1bjaIXRloEx5Y19dV+2jQvChERx7xZYQbiNB                                                                                                 d",
+                "cWuC80gcuP4nyvY9EnuvElQZ858Su8eSp/xGulMb1hiZ/xzlEj5zEDf5cbUNYxT                                                                                                 d",
+                "F/sIq2sA8xgf6inlon3N6NSSAAH1wnrGZCB/VTAl6f/1SL3/F9Ncqcbf1DNeCb8                                                                                                 9",
+                "8l3ReyVb/8fX4wwVEdz/9N6o1XW89kJ+aP/cKvssdQKBgQDpTF9HCxnyF+v+4Tm                                                                                                 I",
+                "ihykMknAPY6vqd/S3+7ADKtrxMca4i/YE8Ti1CTLbBd4dfQfiZaQKO/S8XarLMv                                                                                                 j",
+                "2VqfAPtXe3TCMjIFvAfDfatftrlDX7YCIF3A/0bUqL+eKtnRZLdTmbj9wq21EqD                                                                                                 W",
+                "ipM0JYzPDYSGb410qpPE5cypSwKBgQDKcTWokyuMA2wgT+/54H6CJGVdCHwf0r+                                                                                                 v",
+                "jhDdq7P6i47Zn/rHcQD8RsHE0GYQwIpCsD+33WTIfDsiPBu0o4TrWq8KL8t52cS                                                                                                 O",
+                "HLOLM3D/3H62DR5hwKpuhpWj5HtOuJTl/tc8cpx5KXZk4/65ObTuIDTKq4pZtnu                                                                                                 T",
+                "EOCRaLlNfwKBgQDUz8vhvGiwg83MtJqMyJ+T0COibwSnjOgVLhxVp7j/F4MgLM/                                                                                                 D",
+                "5VSmLSpbPYCza7WCxzlGy3DpFUZQow5iC7U0cerURFOfibZDsN/MHeij6MRahwY                                                                                                 6",
+                "LlgXY0WzWzNgDmqfLaZlZkZvhJR8Jj/9NG9PFCm7/fKzxzJcB/W/mHf2vQKBgC5                                                                                                 R",
+                "tthKTBVuFwhRofPHZMq8LyEZNuVFICy30a4WgkiaM+YhT4zgkzwlqGIy2JeOplP                                                                                                 Z",
+                "5cpY8p1Yp2MO47vyChCboB8xjlnj9LAbaw03iOxR9AANgl0Vayl8y7JDLd92JkN                                                                                                 1",
+                "iqO/CYRDc15kOD0DMh2l6s5Qb4hVU3Lz0p4SmwtbAoGAOcwJQ/OcP/JBCEXd0vP                                                                                                 9",
+                "R2cfrmVMA+6D9pXu0Ag97/zT3TahsZYNgPIvuGqieeJRtV92oKMVaJk8ZPX/swf                                                                                                 Y",
+                "EoytXjctrf4EYPWIwoh1CqSV9RG6PA1FC30Ezizb+BdAnAAV5TGV4BzWSerLDux                                                                                                 T",
+                "+9BSJ1I+QzPtmCHd+g/iSrE=",
+                "-----END PRIVATE KEY-----"
+              ]
+            }
+          ],
+          "alpn": [
+            "h2",
+            "http/1.1",
+            "h3"
+          ],
+          "settings": [
+            {
+              "allowInsecure": false,
+              "fingerprint": "",
+              "serverName": ""
+            }
+          ]
+        },
+        "wsSettings": {
+          "path": "/12345",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-443",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 57575,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "92a806c6-0da3-47e4-f3f3-07cad50c0b6e",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "chrome",
+          "target": "apple.com:443",
+          "xver": 0,
+          "serverNames": [
+            "apple.com"
+          ],
+          "privateKey": "eDq4DNaCC5_UCBKtlPSnbMeH2SirkMMluLOSRSrK5kk",
+          "publicKey": "HDm3i7uCg2AzaaewKO9Jcn2PBgHJ_6xG1Xs6YapINR8",
+          "mldsa65Seed": "",
+          "mldsa65Verify": "",
+          "minClientVer": "",
+          "maxClientVer": "",
+          "maxTimeDiff": 0,
+          "shortIds": [
+            "24c148da"
+          ]
+        },
+        "xhttpSettings": {
+          "path": "/",
+          "host": "",
+          "headers": {},
+          "scMaxBufferedPosts": 30,
+          "scMaxEachPostBytes": "1000000",
+          "noSSEHeader": false,
+          "xPaddingBytes": "100-1000",
+          "mode": "auto"
+        }
+      },
+      "tag": "inbound-57575",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 21831,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "19689329-a70a-4683-b1c8-08d95e0ce338",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/55555",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-21831",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 24584,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "ecfc22d8-ed34-4b1b-c635-609bf2ba89b1",
+            "flow": "xtls-rprx-vision"
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "chrome",
+          "target": "apple.com:443",
+          "xver": 0,
+          "serverNames": [
+            "apple.com"
+          ],
+          "privateKey": "aMyuAbK_mKCaLNIi-qrft4XarnY0y00enTni7XHp7kE",
+          "publicKey": "Vsn2GKumb2ptlTwAwiAFU48acfgVOeh-E-BcWyKJdEM",
+          "mldsa65Seed": "",
+          "mldsa65Verify": "",
+          "minClientVer": "",
+          "maxClientVer": "",
+          "maxTimeDiff": 0,
+          "shortIds": [
+            "eb6b4c0f"
+          ]
+        },
+        "tcpSettings": {
+          "header": {
+            "type": "none"
+          }
+        }
+      },
+      "tag": "inbound-24584",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 2083,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "978c4cf9-fd41-4e8e-8487-a606c431774b",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "U129.BIU135.EU.ORG",
+          "rejectUnknownSni": false,
+          "minVersion": "1.2",
+          "maxVersion": "1.3",
+          "cipherSuites": "",
+          "certificates": [
+            {
+              "ocspStapling": 3600,
+              "certificate": [
+                "-----BEGIN CERTIFICATE-----",
+                "MIIEpjCCA46gAwIBAgIUG+cOY6ECiIcgOlvIRhxiyT8XPdQwDQYJKoZIhvcNAQE                                                                                                 L",
+                "BQAwgYsxCzAJBgNVBAYTAlVTMRkwFwYDVQQKExBDbG91ZEZsYXJlLCBJbmMuMTQ                                                                                                 w",
+                "MgYDVQQLEytDbG91ZEZsYXJlIE9yaWdpbiBTU0wgQ2VydGlmaWNhdGUgQXV0aG9                                                                                                 y",
+                "aXR5MRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMRMwEQYDVQQIEwpDYWxpZm9ybml                                                                                                 h",
+                "MB4XDTI1MDIyODAxMTAwMFoXDTQwMDIyNTAxMTAwMFowYjEZMBcGA1UEChMQQ2x                                                                                                 v",
+                "dWRGbGFyZSwgSW5jLjEdMBsGA1UECxMUQ2xvdWRGbGFyZSBPcmlnaW4gQ0ExJjA                                                                                                 k",
+                "BgNVBAMTHUNsb3VkRmxhcmUgT3JpZ2luIENlcnRpZmljYXRlMIIBIjANBgkqhki                                                                                                 G",
+                "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuH1uyo0VJYkTxIKlUT30+848XXbkdbRLXFj                                                                                                 P",
+                "7dfhVmDFFAQsoKuz/5oVky17aEVISBi/Ji+6EdVcVn7Iek1k4W2MOib8UlToj0S                                                                                                 S",
+                "B1Mbeosx2hnahgk1E7T5b8Zv+lNEGgJ2dAPqwNlqx+G50YHvEDUxicVe+mQF/dV                                                                                                 H",
+                "0SVeZD2Ebm9sz9LSg8T0VpLnz5fQdeEKiMzu5spqs7fV/HdzdIJO42824AkUlX1                                                                                                 5",
+                "tjz1n1vYGm+h3gcz0gJGz/ukqI4MCzozl6VHy8VqvHm5bl/sgIegwgE+QaNXQw3                                                                                                 1",
+                "idmL1v++KhC17KSK2nzuT427D8NIlTDTPRfOBTPYdED0XqaLNQIDAQABo4IBKDC                                                                                                 C",
+                "ASQwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQc                                                                                                 D",
+                "ATAMBgNVHRMBAf8EAjAAMB0GA1UdDgQWBBRRImFTLcOAq7zkQGWsCoiHneKfNjA                                                                                                 f",
+                "BgNVHSMEGDAWgBQk6FNXXXw0QIep65TbuuEWePwppDBABggrBgEFBQcBAQQ0MDI                                                                                                 w",
+                "MAYIKwYBBQUHMAGGJGh0dHA6Ly9vY3NwLmNsb3VkZmxhcmUuY29tL29yaWdpbl9                                                                                                 j",
+                "YTApBgNVHREEIjAggg8qLmJpdTEzNS5ldS5vcmeCDWJpdTEzNS5ldS5vcmcwOAY                                                                                                 D",
+                "VR0fBDEwLzAtoCugKYYnaHR0cDovL2NybC5jbG91ZGZsYXJlLmNvbS9vcmlnaW5                                                                                                 f",
+                "Y2EuY3JsMA0GCSqGSIb3DQEBCwUAA4IBAQB3xX9gEsjC+yOfMAcKmyPv8u9ALo+                                                                                                 +",
+                "jAf3Re/qi/cQoKo6VH+0JQ8Km+HzMdwQiQX48kZvAE7AFpE6ajPGsMYaSfC+DHb                                                                                                 o",
+                "WIDlL2sMEJzDDBmVxO9kuP8aDwElXxO7D2VWsprT2j0Vti37dAA15swvoOT9CxX                                                                                                 c",
+                "f0zOr1EY7LO+fawXOkggivbFAG+RPa3JikcOYymhyGgSKBCx0UmMEVwZxoWl+7i                                                                                                 w",
+                "/v8e8x84BqiOpif8ncJ1U/6JvMdnnDunLwW2P8wHjmOozQIg1YMeuB7tZg7E/pl                                                                                                 j",
+                "ShJvHLlyydKmVZQn325zNREs2IlzC20VFFqPCxVdqDuqUDQBlbF67HH7",
+                "-----END CERTIFICATE-----"
+              ],
+              "key": [
+                "-----BEGIN PRIVATE KEY-----",
+                "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4fW7KjRUliRP                                                                                                 E",
+                "gqVRPfT7zjxdduR1tEtcWM/t1+FWYMUUBCygq7P/mhWTLXtoRUhIGL8mL7oR1Vx                                                                                                 W",
+                "fsh6TWThbYw6JvxSVOiPRJIHUxt6izHaGdqGCTUTtPlvxm/6U0QaAnZ0A+rA2Wr                                                                                                 H",
+                "4bnRge8QNTGJxV76ZAX91UfRJV5kPYRub2zP0tKDxPRWkufPl9B14QqIzO7mymq                                                                                                 z",
+                "t9X8d3N0gk7jbzbgCRSVfXm2PPWfW9gab6HeBzPSAkbP+6SojgwLOjOXpUfLxWq                                                                                                 8",
+                "ebluX+yAh6DCAT5Bo1dDDfWJ2YvW/74qELXspIrafO5PjbsPw0iVMNM9F84FM9h                                                                                                 0",
+                "QPRepos1AgMBAAECggEAEHHQeVTgCKt89pbf84DpSwn+uXoKh9oH9Er6UGyzaka                                                                                                 l",
+                "P9Erb9ro6CSs6E81Nn3Odpa2Gx+an1JRsRK1/f4outX6mjMKv1qlgXe5kyuQ7Hh                                                                                                 n",
+                "JitdyMrIpLa3RoOn9uaLJc0IZUj1bjaIXRloEx5Y19dV+2jQvChERx7xZYQbiNB                                                                                                 d",
+                "cWuC80gcuP4nyvY9EnuvElQZ858Su8eSp/xGulMb1hiZ/xzlEj5zEDf5cbUNYxT                                                                                                 d",
+                "F/sIq2sA8xgf6inlon3N6NSSAAH1wnrGZCB/VTAl6f/1SL3/F9Ncqcbf1DNeCb8                                                                                                 9",
+                "8l3ReyVb/8fX4wwVEdz/9N6o1XW89kJ+aP/cKvssdQKBgQDpTF9HCxnyF+v+4Tm                                                                                                 I",
+                "ihykMknAPY6vqd/S3+7ADKtrxMca4i/YE8Ti1CTLbBd4dfQfiZaQKO/S8XarLMv                                                                                                 j",
+                "2VqfAPtXe3TCMjIFvAfDfatftrlDX7YCIF3A/0bUqL+eKtnRZLdTmbj9wq21EqD                                                                                                 W",
+                "ipM0JYzPDYSGb410qpPE5cypSwKBgQDKcTWokyuMA2wgT+/54H6CJGVdCHwf0r+                                                                                                 v",
+                "jhDdq7P6i47Zn/rHcQD8RsHE0GYQwIpCsD+33WTIfDsiPBu0o4TrWq8KL8t52cS                                                                                                 O",
+                "HLOLM3D/3H62DR5hwKpuhpWj5HtOuJTl/tc8cpx5KXZk4/65ObTuIDTKq4pZtnu                                                                                                 T",
+                "EOCRaLlNfwKBgQDUz8vhvGiwg83MtJqMyJ+T0COibwSnjOgVLhxVp7j/F4MgLM/                                                                                                 D",
+                "5VSmLSpbPYCza7WCxzlGy3DpFUZQow5iC7U0cerURFOfibZDsN/MHeij6MRahwY                                                                                                 6",
+                "LlgXY0WzWzNgDmqfLaZlZkZvhJR8Jj/9NG9PFCm7/fKzxzJcB/W/mHf2vQKBgC5                                                                                                 R",
+                "tthKTBVuFwhRofPHZMq8LyEZNuVFICy30a4WgkiaM+YhT4zgkzwlqGIy2JeOplP                                                                                                 Z",
+                "5cpY8p1Yp2MO47vyChCboB8xjlnj9LAbaw03iOxR9AANgl0Vayl8y7JDLd92JkN                                                                                                 1",
+                "iqO/CYRDc15kOD0DMh2l6s5Qb4hVU3Lz0p4SmwtbAoGAOcwJQ/OcP/JBCEXd0vP                                                                                                 9",
+                "R2cfrmVMA+6D9pXu0Ag97/zT3TahsZYNgPIvuGqieeJRtV92oKMVaJk8ZPX/swf                                                                                                 Y",
+                "EoytXjctrf4EYPWIwoh1CqSV9RG6PA1FC30Ezizb+BdAnAAV5TGV4BzWSerLDux                                                                                                 T",
+                "+9BSJ1I+QzPtmCHd+g/iSrE=",
+                "-----END PRIVATE KEY-----"
+              ]
+            }
+          ],
+          "alpn": [
+            "h2",
+            "http/1.1",
+            "h3"
+          ],
+          "settings": [
+            {
+              "allowInsecure": false,
+              "fingerprint": "",
+              "serverName": ""
+            }
+          ]
+        },
+        "xhttpSettings": {
+          "path": "/978c4cf9-fd41-4e8e-8487-a606c431774b",
+          "host": "",
+          "headers": {},
+          "scMaxBufferedPosts": 30,
+          "scMaxEachPostBytes": "1000000",
+          "noSSEHeader": false,
+          "xPaddingBytes": "100-1000",
+          "mode": "packet-up"
+        }
+      },
+      "tag": "inbound-2083",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 2082,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "12e9e45a-01a3-498d-e331-7a3dfe461eed",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "none",
+        "xhttpSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "host": "",
+          "headers": {},
+          "scMaxBufferedPosts": 30,
+          "scMaxEachPostBytes": "1000000",
+          "noSSEHeader": false,
+          "xPaddingBytes": "100-1000",
+          "mode": "packet-up"
+        }
+      },
+      "tag": "inbound-2082",
+      "sniffing": {
+        "enabled": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 30000,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "12e9e45a-01a3-498d-e331-7a3dfe461eed",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-30000",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 30001,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "12e9e45a-01a3-498d-e331-7a3dfe461eed",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-30001",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 30002,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "12e9e45a-01a3-498d-e331-7a3dfe461eed",
+            "flow": ""
+          }
+        ],
+        "decryption": "none",
+        "encryption": "none",
+        "selectedAuth": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-30002",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 31000,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "12e9e45a-01a3-498d-e331-7a3dfe461eed"
+          }
+        ],
+        "fallbacks": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-31000",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 31001,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "12e9e45a-01a3-498d-e331-7a3dfe461eed"
+          }
+        ],
+        "fallbacks": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-31001",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": null,
+      "port": 31002,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "12e9e45a-01a3-498d-e331-7a3dfe461eed"
+          }
+        ],
+        "fallbacks": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/12e9e45a-01a3-498d-e331-7a3dfe461eed",
+          "headers": {}
+        }
+      },
+      "tag": "inbound-31002",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "blackhole",
+      "tag": "blocked"
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    },
+    {
+      "tag": "vps-outbound-v4",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4v6"
+      }
+    },
+    {
+      "tag": "vps-outbound-v6",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv6v4"
+      }
+    },
+    {
+      "tag": "socks5-warp",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 40000
+          }
+        ]
+      }
+    },
+    {
+      "tag": "socks5-warp-v4",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4v6"
+      },
+      "proxySettings": {
+        "tag": "socks5-warp"
+      }
+    },
+    {
+      "tag": "socks5-warp-v6",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv6v4"
+      },
+      "proxySettings": {
+        "tag": "socks5-warp"
+      }
+    },
+    {
+      "tag": "xray-wg-warp",
+      "protocol": "wireguard",
+      "settings": {
+        "secretKey": "4GRI+uhXHop6U9H5Gi4YbD+5IoBvZ/kLdTdyal/y9EE=",
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:845b:dd5b:5b91:8e5a:60b9/128"
+        ],
+        "peers": [
+          {
+            "publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+            "allowedIPs": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "endpoint": "162.159.192.1:2408"
+          }
+        ],
+        "reserved": [
+          197,
+          230,
+          30
+        ]
+      }
+    },
+    {
+      "tag": "xray-wg-warp-v4",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4v6"
+      },
+      "proxySettings": {
+        "tag": "xray-wg-warp"
+      }
+    },
+    {
+      "tag": "xray-wg-warp-v6",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv6v4"
+      },
+      "proxySettings": {
+        "tag": "xray-wg-warp"
+      }
+    },
+    {
+      "tag": "socks5-aimili",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 17928
+          }
+        ]
+      }
+    },
+    {
+      "tag": "socks5-aimili-v4",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      },
+      "proxySettings": {
+        "tag": "socks5-aimili"
+      }
+    }
+  ],
+  "transport": null,
+  "policy": {
+    "system": {
+      "statsInboundDownlink": true,
+      "statsInboundUplink": true
+    },
+    "levels": {
+      "0": {
+        "handshake": 10,
+        "connIdle": 100,
+        "uplinkOnly": 2,
+        "downlinkOnly": 3,
+        "bufferSize": 10240
+      }
+    }
+  },
+  "api": {
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService"
+    ],
+    "tag": "api"
+  },
+  "stats": {},
+  "reverse": null,
+  "fakeDns": null

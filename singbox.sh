@@ -1,15 +1,14 @@
 #!/bin/bash
 
 # ====================================================================
-#  脚本名称: Sing-Box & Local Web Panel (MetaCubeXD) 一键安装管理脚本
-#  系统支持: Debian, Ubuntu, CentOS, Rocky Linux (Systemd 兼容)
+#  脚本名称: Sing-Box & Local Web Panel (MetaCubeXD) 终极一键管理脚本
+#  系统支持: Debian, Ubuntu, CentOS, Rocky Linux, Alpine (OpenRC/Systemd 兼容)
 #  适用架构: AMD64, ARM64
 #  主要特点: 
-#    1. 自动获取并安装最新官方 Sing-Box 核心
-#    2. 零外部 Web 依赖 (无 Nginx/Python)，Sing-Box 自行托管 Web 面板
-#    3. 自动安装最现代化的 MetaCubeXD 极简美学控制台
-#    4. 支持安全密钥 (Secret) 验证，保障面板不被非法扫描
-#    5. 完美兼容 OpenVZ、LXC 等限制型虚拟化平台，自带一键诊断修复工具
+#    1. 跨平台多协议支持，安装完成后，终端输入 sb 即可快捷管理
+#    2. 自动部署官方最新 Sing-Box 核心 + 静态 Web 托管面板 (MetaCubeXD)
+#    3. 预设安全 Shadowsocks 2022 (Blake3) 与 Mixed 通用入站端口
+#    4. 彻底解决 OpenVZ、LXC 等轻量虚拟化平台下守护进程权限崩溃问题
 # ====================================================================
 
 export LANG=en_US.UTF-8
@@ -23,114 +22,155 @@ PURPLE='\033[0;35m'
 PLAIN='\033[0m'
 
 # 通知与引导函数
-info() { echo -e "${BLUE}[信息]${PLAIN} $1"; }
-success() { echo -e "${GREEN}[成功]${PLAIN} $1"; }
-warn() { echo -e "${YELLOW}[警告]${PLAIN} $1"; }
-error() { echo -e "${RED}[错误]${PLAIN} $1"; }
+info() { echo -e "${BLUE}[信息]${PLAIN} $*"; }
+success() { echo -e "${GREEN}[成功]${PLAIN} $*"; }
+warn() { echo -e "${YELLOW}[警告]${PLAIN} $*"; }
+error() { echo -e "${RED}[错误]${PLAIN} $*"; }
 readp() { read -p "$(echo -e "${YELLOW}$1${PLAIN}")" $2; }
 
 # 权限验证
 [[ $EUID -ne 0 ]] && error "请使用 root 权限或 sudo 运行此脚本！" && exit 1
 
-# 基础目录配置
+# 基础路径配置
 SB_DIR="/etc/sing-box"
-SB_BIN="/usr/local/bin/sing-box"
+SB_BIN="/usr/bin/sing-box"
 SB_UI_DIR="${SB_DIR}/ui"
 SB_CONFIG="${SB_DIR}/config.json"
+SS_URI_PATH="${SB_DIR}/ss_uri.txt"
+SB_SHORTCUT="/usr/local/bin/sb"
 
-# 检测系统与架构
-detect_env() {
+# 如果用户已经安装，运行此脚本直接跳转快捷面板
+if [ -f "$SB_CONFIG" ] && [ -f "$SB_SHORTCUT" ]; then
+    success "检测到您已成功安装 Sing-Box 服务，正在为您调出控制面板..."
+    sleep 1
+    exec "$SB_SHORTCUT"
+fi
+
+# 检测系统平台
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID="${ID:-}"
+        OS_ID_LIKE="${ID_LIKE:-}"
+    else
+        OS_ID=""
+        OS_ID_LIKE=""
+    fi
+
+    if echo "$OS_ID $OS_ID_LIKE" | grep -qi "alpine"; then
+        OS="alpine"
+    elif echo "$OS_ID $OS_ID_LIKE" | grep -Ei "debian|ubuntu" >/dev/null; then
+        OS="debian"
+    elif echo "$OS_ID $OS_ID_LIKE" | grep -Ei "centos|rhel|fedora" >/dev/null; then
+        OS="redhat"
+    else
+        OS="unknown"
+    fi
+
     # 检测架构
     case $(uname -m) in
         x86_64) ARCH="amd64" ;;
         aarch64|arm64) ARCH="arm64" ;;
-        *) error "暂不支持当前的 $(uname -m) CPU 架构" && exit 1 ;;
+        *) error "暂不支持当前的 $(uname -m) 架构" && exit 1 ;;
     esac
-
-    # 检测系统包管理器
-    if [ -x "$(command -v apt-get)" ]; then
-        PM="apt"
-    elif [ -x "$(command -v dnf)" ]; then
-        PM="dnf"
-    elif [ -x "$(command -v yum)" ]; then
-        PM="yum"
-    else
-        error "未能识别的系统包管理器，请在 Debian/Ubuntu/CentOS/Rocky 下运行。" && exit 1
-    fi
 }
 
-# 安装必要依赖
+# 安装依赖项
 install_deps() {
-    info "正在检测并安装基础系统依赖 (curl, wget, tar, unzip, jq)..."
-    if [ "$PM" = "apt" ]; then
-        apt-get update -y >/dev/null 2>&1
-        apt-get install -y curl wget tar unzip jq -y >/dev/null 2>&1
-    else
-        $PM install -y curl wget tar unzip jq -y >/dev/null 2>&1
-    fi
+    info "检测并安装基础系统依赖..."
+    case "$OS" in
+        alpine)
+            apk update >/dev/null 2>&1
+            apk add --no-cache bash curl wget unzip tar ca-certificates openssl openrc jq libc6-compat gcompat >/dev/null 2>&1
+            # 确保 OpenRC 服务管理器启动
+            if ! rc-service --list 2>/dev/null | grep -q "^openrc"; then
+                rc-update add openrc boot >/dev/null 2>&1 || true
+                rc-service openrc start >/dev/null 2>&1 || true
+            fi
+            ;;
+        debian)
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y >/dev/null 2>&1
+            apt-get install -y jq curl wget unzip tar ca-certificates openssl >/dev/null 2>&1
+            ;;
+        redhat)
+            if [ -x "$(command -v dnf)" ]; then
+                dnf install -y jq curl wget unzip tar ca-certificates openssl >/dev/null 2>&1
+            else
+                yum install -y jq curl wget unzip tar ca-certificates openssl >/dev/null 2>&1
+            fi
+            ;;
+        *)
+            warn "未识别的系统，尝试使用通用命令安装依赖..."
+            ;;
+    esac
 }
 
-# 获取最新 Sing-Box 版本
+# 获取 Sing-Box 最新版本号
 get_latest_version() {
-    info "正在获取 Sing-Box 最新官方版本号..."
+    info "正在检索官方 GitHub 库最新版本号..."
     LATEST_VER=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -r .tag_name)
     if [ -z "$LATEST_VER" ] || [ "$LATEST_VER" = "null" ]; then
-        LATEST_VER="v1.11.2" # 备用高稳定性版本
-        warn "通过 GitHub API 获取版本失败，将采用备用稳定版: ${LATEST_VER}"
+        LATEST_VER="v1.11.2" # 经典高兼容备用版
+        warn "获取最新版本号超时，将使用稳定备用版: ${LATEST_VER}"
     else
-        success "成功获取最新官方版本: ${LATEST_VER}"
+        success "最新版本号获取成功: ${LATEST_VER}"
     fi
-    # 去除 'v' 前缀以供构建 URL
     VERSION_NUM="${LATEST_VER#v}"
 }
 
-# 部署静态面板资源 (高可靠精准提取算法)
+# 部署 Web 静态 UI
 deploy_web_ui() {
     local temp_dir="$1"
-    info "正在部署现代化 Web 控制面板 (MetaCubeXD)..."
+    info "正在下载现代化 Web 控制面板 (MetaCubeXD)..."
     UI_URL="https://github.com/MetaCubeX/MetaCubeXD/archive/refs/heads/gh-pages.zip"
-    
+
     if ! wget -q --show-progress -O "${temp_dir}/panel.zip" "$UI_URL"; then
-        warn "下载主控制面板失败，正在尝试使用备用 Yacd 极简控制台..."
+        warn "主控面板下载超时，正在切换备用 Yacd 极简控制面板..."
         UI_URL="https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip"
         if ! wget -q --show-progress -O "${temp_dir}/panel.zip" "$UI_URL"; then
-            error "控制面板资源全部下载失败，请检查服务器网络。"
+            error "控制面板静态资产下载失败，请检查网络。"
             return 1
         fi
     fi
 
     unzip -q "${temp_dir}/panel.zip" -d "$temp_dir"
     rm -rf "${SB_UI_DIR:?}"/*
-    
-    # 动态递归定位解压目录中 index.html 所在的真实根目录
+
+    # 精准检索 index.html 所在的静态根目录
     local real_src_dir=$(find "$temp_dir" -name "index.html" -exec dirname {} \; | head -n 1)
     if [[ -n "$real_src_dir" && -d "$real_src_dir" ]]; then
         cp -r "$real_src_dir"/* "$SB_UI_DIR/"
-        success "Web 面板静态资源已成功高可靠部署至: $SB_UI_DIR"
+        success "Web 面板资源部署成功: $SB_UI_DIR"
         return 0
     else
-        error "解压后的目录中未找到关键引导主页 index.html！"
+        error "解压文件中未找到关键入口网页 index.html！"
         return 1
     fi
 }
 
-# 部署并构建 Web 控制面板
-install_singbox() {
-    detect_env
+# 转换标准的 shadowsocks 2022 url-safe base64 格式
+to_urlsafe_base64() {
+    local input="$1"
+    printf "%s" "$input" | base64 | tr '+/' '-_' | tr -d '=' | tr -d '\n\r'
+}
+
+# 主安装逻辑
+install_main() {
+    detect_os
     install_deps
     get_latest_version
 
-    # 创建工作目录
     mkdir -p "$SB_DIR"
     mkdir -p "$SB_UI_DIR"
 
-    # 下载并提取二进制
+    # 下载并部署二进制主程序
     info "正在下载 Sing-Box ${LATEST_VER} ($ARCH)..."
     DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/${LATEST_VER}/sing-box-${VERSION_NUM}-linux-${ARCH}.tar.gz"
-    
+
     TEMP_DIR=$(mktemp -d)
     if ! wget -q --show-progress -O "${TEMP_DIR}/sing-box.tar.gz" "$DOWNLOAD_URL"; then
-        error "下载 Sing-Box 核心失败，请检查您的服务器与 GitHub 的网络连接。"
+        error "下载 Sing-Box 核心程序失败，请自检网络连接。"
         rm -rf "$TEMP_DIR"
         exit 1
     fi
@@ -138,30 +178,38 @@ install_singbox() {
     tar -zxf "${TEMP_DIR}/sing-box.tar.gz" -C "$TEMP_DIR"
     cp $(find "$TEMP_DIR" -type f -name "sing-box" | head -n 1) "$SB_BIN"
     chmod +x "$SB_BIN"
-    success "Sing-Box 主程序已成功部署至 $SB_BIN"
+    success "Sing-Box 核心程序成功安装至: $SB_BIN"
 
-    # 部署网页静态面板
+    # 部署 Web 静态 UI
     deploy_web_ui "$TEMP_DIR"
-
-    # 清理临时工作区
     rm -rf "$TEMP_DIR"
 
-    # 引导用户输入 Web 面板配置
+    # 引导用户设置端口和凭证
     echo "--------------------------------------------------"
-    readp "请设置 Web 面板访问端口 (默认 9090): " WEB_PORT
+    readp "设置 Web 面板通信端口 [1-65535] (回车默认 9090): " WEB_PORT
     [[ -z "$WEB_PORT" ]] && WEB_PORT=9090
-    
-    # 自动生成安全密钥
+
+    # 自动生成 12 字节安全 Web Secret
     AUTO_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | head -c 12)
-    [[ -z "$AUTO_SECRET" ]] && AUTO_SECRET="sbSecret520"
-    readp "请设置面板连接安全密钥 Secret (回车使用随机密钥 ${AUTO_SECRET}): " WEB_SECRET
+    [[ -z "$AUTO_SECRET" ]] && AUTO_SECRET="sbSecret99"
+    readp "设置面板连接安全密钥 Secret (回车使用随机密钥 ${AUTO_SECRET}): " WEB_SECRET
     [[ -z "$WEB_SECRET" ]] && WEB_SECRET="$AUTO_SECRET"
 
-    readp "请设置本地混合监听代理端口 (如SOCKS5/HTTP, 默认 2080): " MIXED_PORT
+    # 自动生成 16 字节 Shadowsocks 密码 (AES-128)
+    AUTO_SS_PWD=$(openssl rand -base64 16 2>/dev/null | tr -d '\n\r' || head -c 16 /dev/urandom | base64 | tr -d '\n\r')
+    readp "设置 Shadowsocks 2022 代理密码 (回车自动生成随机密钥): " SS_PWD
+    [[ -z "$SS_PWD" ]] && SS_PWD="$AUTO_SS_PWD"
+
+    readp "设置 Shadowsocks 代理端口 [1-65535] (回车默认随机端口): " SS_PORT
+    if [[ -z "$SS_PORT" ]]; then
+        SS_PORT=$(shuf -i 10000-60000 -n 1)
+    fi
+
+    readp "设置本地 Mixed (Socks/HTTP) 混合代理端口 (回车默认 2080): " MIXED_PORT
     [[ -z "$MIXED_PORT" ]] && MIXED_PORT=2080
     echo "--------------------------------------------------"
 
-    # 创建纯净无冲突的基础 config.json
+    # 写入完美配置
     cat > "$SB_CONFIG" <<EOF
 {
   "log": {
@@ -179,9 +227,17 @@ install_singbox() {
   },
   "inbounds": [
     {
+      "type": "shadowsocks",
+      "tag": "ss-in",
+      "listen": "::",
+      "listen_port": ${SS_PORT},
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "${SS_PWD}"
+    },
+    {
       "type": "mixed",
       "tag": "mixed-in",
-      "listen": "0.0.0.0",
+      "listen": "::",
       "listen_port": ${MIXED_PORT},
       "sniff": true,
       "sniff_override_destination": true
@@ -199,301 +255,355 @@ install_singbox() {
   ]
 }
 EOF
-    success "Sing-Box 纯净配置文件已生成: $SB_CONFIG"
+    success "Sing-Box 配置文件生成完毕: $SB_CONFIG"
 
-    # 注册 Systemd 守护进程 (移除导致 OpenVZ/LXC 启动失败的 Capability sandboxing Directive)
-    info "正在配置自适应 Systemd 守护服务..."
-    cat > /etc/systemd/system/sing-box.service <<EOF
-[Unit]
-Description=sing-box service
-Documentation=https://sing-box.sagernet.org
-After=network.target nss-lookup.target
+    # 配置系统服务与守护程序
+    setup_system_service
 
-[Service]
-Type=simple
-User=root
-ExecStart=${SB_BIN} run -c ${SB_CONFIG}
-WorkingDirectory=${SB_DIR}
-Restart=always
-RestartSec=5
-LimitN_FILE=1000000
+    # 创建快捷管理工具 sb
+    create_sb_shortcut
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload >/dev/null 2>&1
-    systemctl enable sing-box >/dev/null 2>&1
-    systemctl restart sing-box >/dev/null 2>&1
-
-    # 自动开启防火墙端口 (如有必要)
-    if systemctl is-active --quiet firewalld 2>/dev/null; then
-        firewall-cmd --zone=public --add-port=${WEB_PORT}/tcp --permanent >/dev/null 2>&1
-        firewall-cmd --zone=public --add-port=${MIXED_PORT}/tcp --permanent >/dev/null 2>&1
-        firewall-cmd --reload >/dev/null 2>&1
-    elif command -v ufw >/dev/null 2>&1; then
-        ufw allow ${WEB_PORT}/tcp >/dev/null 2>&1
-        ufw allow ${MIXED_PORT}/tcp >/dev/null 2>&1
-        ufw reload >/dev/null 2>&1
-    fi
-
-    # 获取本机的外部访问 IP 地址
-    local external_ip=$(curl -s4m5 icanhazip.com || curl -s4m5 api.ipify.org || echo "您的服务器公网IP")
+    # 获取外部公网 IP 显示信息
+    local external_ip=$(curl -s4m5 icanhazip.com || curl -s4m5 api.ipify.org || echo "YOUR_SERVER_IP")
+    
+    # 自动生成 SS 链接
+    local userinfo="2022-blake3-aes-128-gcm:${SS_PWD}"
+    local encoded_userinfo=$(to_urlsafe_base64 "$userinfo")
+    local ss_uri="ss://${encoded_userinfo}@${external_ip}:${SS_PORT}#singbox-ss2022"
+    echo "$ss_uri" > "$SS_URI_PATH"
 
     echo -e "\n${GREEN}==================================================${PLAIN}"
-    echo -e "${GREEN}      🎉 Sing-Box 核心及 Web 控制面板部署完成！${PLAIN}"
+    echo -e "${GREEN}      🎉 Sing-Box 核心与自托管面板部署成功！${PLAIN}"
     echo -e "${GREEN}==================================================${PLAIN}"
-    echo -e "1. 💻 面板访问连接: ${BLUE}http://${external_ip}:${WEB_PORT}/ui/${PLAIN}"
-    echo -e "2. 🔑 面板安全密钥 (Secret): ${PURPLE}${WEB_SECRET}${PLAIN}"
-    echo -e "   ${YELLOW}(注: 首次打开页面，请在弹出设置框中填入该 Secret 即可完成通信)${PLAIN}"
-    echo -e "3. 🔌 本地多协议混合监听端口: ${BLUE}${MIXED_PORT}${PLAIN}"
-    echo -e "4. 📂 配置文件路径: ${BLUE}${SB_CONFIG}${PLAIN}"
-    echo -e "5. 📁 静态面板资源目录: ${BLUE}${SB_UI_DIR}${PLAIN}"
+    echo -e "1. 💻 静态控制面板地址: ${BLUE}http://${external_ip}:${WEB_PORT}/ui/${PLAIN}"
+    echo -e "2. 🔑 外部控制安全密钥 (Secret): ${PURPLE}${WEB_SECRET}${PLAIN}"
+    echo -e "3. 🔌 Shadowsocks 2022 端口: ${BLUE}${SS_PORT}${PLAIN}"
+    echo -e "4. 🔗 专属 SS 节点链接 (SIP002):"
+    echo -e "   ${BLUE}${ss_uri}${PLAIN}"
+    echo -e "--------------------------------------------------"
+    echo -e "💡 温馨提示: 终端随时输入 ${GREEN}sb${PLAIN} 即可调出全功能管理面板！"
     echo -e "${GREEN}==================================================${PLAIN}\n"
 }
 
-# 自动诊断核心启动失败原因并执行自我修复
-diagnose_failures() {
-    info "正在启动一键诊断程序..."
-    sleep 1
+# 注册开机自启系统服务 (Systemd 与 OpenRC 智能自动区分)
+setup_system_service() {
+    info "正在注册底层开机运行守护服务..."
+    if [ "$OS" = "alpine" ]; then
+        local service_path="/etc/init.d/sing-box"
+        cat > "$service_path" <<'OPENRC'
+#!/sbin/openrc-run
 
-    # 1. 验证主程序是否存在
-    if [ ! -f "$SB_BIN" ]; then
-        error "检测失败：主二进制程序 $SB_BIN 不存在，请执行选项 1 重新安装。"
-        return 1
-    fi
-    chmod +x "$SB_BIN"
+name="sing-box"
+description="Sing-box Proxy Server with Custom Web UI"
+command="/usr/bin/sing-box"
+command_args="run -c /etc/sing-box/config.json"
+pidfile="/run/${RC_SVCNAME}.pid"
+command_background="yes"
+output_log="/var/log/sing-box.log"
+error_log="/var/log/sing-box.err"
 
-    # 2. 验证二进制可用性 (防止 CPU 架构错误导致执行异常)
-    if ! "$SB_BIN" version >/dev/null 2>&1; then
-        error "主程序加载异常！该二进制程序无法在当前的 CPU 架构或系统环境下执行。"
-        warn "可能原因：系统架构不兼容，或当前系统缺少标准 C 动态运行库库依赖。"
-        return 1
-    fi
+depend() {
+    need net
+    after firewall
+}
 
-    # 3. 验证 JSON 语法
-    if [ ! -f "$SB_CONFIG" ]; then
-        error "配置文件 $SB_CONFIG 缺失。"
-        return 1
-    fi
-
-    info "正在对配置文件进行格式与语法完整性校验..."
-    local check_output
-    check_output=$("$SB_BIN" check -c "$SB_CONFIG" 2>&1)
-    if [ $? -ne 0 ]; then
-        error "校验未通过！配置文件中存在格式或参数类型错误，具体诊断如下："
-        echo -e "${RED}${check_output}${PLAIN}"
-        return 1
+start_pre() {
+    checkpath --directory --mode 0755 /var/log
+    checkpath --directory --mode 0755 /run
+}
+OPENRC
+        chmod +x "$service_path"
+        rc-update add sing-box default >/dev/null 2>&1 || true
+        rc-service sing-box restart || true
     else
-        success "配置文件 JSON 校验完成，未发现语法缺陷。"
-    fi
-
-    # 4. 检查静态 Web 资源
-    if [ ! -f "${SB_UI_DIR}/index.html" ]; then
-        warn "静态网页资源文件夹为空，或缺少 index.html，这可能会导致服务异常退出。"
-        info "正在尝试重新修复网页资源下载..."
-        local re_temp=$(mktemp -d)
-        deploy_web_ui "$re_temp"
-        rm -rf "$re_temp"
-    fi
-
-    # 5. 排查端口抢占
-    local web_port=$(jq -r '.experimental.clash_api.external_controller' "$SB_CONFIG" 2>/dev/null | cut -d':' -f2)
-    local mixed_port=$(jq -r '.inbounds[0].listen_port' "$SB_CONFIG" 2>/dev/null)
-    
-    if [[ -n "$web_port" && -n "$mixed_port" ]]; then
-        info "正在检索系统中运行的端口是否与当前端口产生冲突..."
-        local port_conflict=0
-        if command -v ss &>/dev/null; then
-            if ss -tunlp | grep -q ":${web_port} "; then
-                error "端口 ${web_port} 已被服务器上其他服务抢占，导致核心无法启动！"
-                port_conflict=1
-            fi
-            if ss -tunlp | grep -q ":${mixed_port} "; then
-                error "混合监听端口 ${mixed_port} 已被其他进程绑定！"
-                port_conflict=1
-            fi
-        fi
-
-        if [ $port_conflict -eq 1 ]; then
-            info "修复方案：请使用菜单选项 5 将端口变更为目前未使用的空闲端口。"
-            return 1
-        fi
-    fi
-
-    # 6. 前台测试与重构 Systemd
-    info "正在进行前台运行环境试跑分析以获取深层报错..."
-    local temp_run_log="/tmp/sb_dry.log"
-    timeout 3 "$SB_BIN" run -c "$SB_CONFIG" > "$temp_run_log" 2>&1
-    local run_status=$?
-
-    # 124 代表 timeout 命令由于时间到正常退出，说明服务前台拉起一切正常
-    if [ $run_status -eq 124 ]; then
-        success "前台环境试跑验证成功，未返回致命异常代码。"
-        info "确认是 Systemd 虚拟化配置兼容性引起，正在重构 Systemd 守护逻辑并修复权限..."
-        
-        # 强制重写极简开机启动
-        cat > /etc/systemd/system/sing-box.service <<EOF
+        local service_path="/etc/systemd/system/sing-box.service"
+        cat > "$service_path" <<EOF
 [Unit]
-Description=sing-box service
+Description=Sing-box Proxy Server with Custom Web UI
 Documentation=https://sing-box.sagernet.org
 After=network.target nss-lookup.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=root
+WorkingDirectory=/etc/sing-box
 ExecStart=${SB_BIN} run -c ${SB_CONFIG}
-WorkingDirectory=${SB_DIR}
-Restart=always
-RestartSec=5
-LimitN_FILE=1000000
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=on-failure
+RestartSec=10s
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
-        systemctl daemon-reload
-        systemctl restart sing-box
-        sleep 2
-        
-        if systemctl is-active --quiet sing-box; then
-            success "恭喜！Sing-Box 服务已成功重构修复，并正常启动成功。"
-        else
-            error "服务修复应用后依然未能按预期成功拉起，请使用选项 4 获取实时系统日志。"
-        fi
-    else
-        error "核心启动阶段返回了致命错误，报错日志如下："
-        cat "$temp_run_log"
-    fi
-    rm -f "$temp_run_log"
-}
-
-# 卸载功能
-uninstall_singbox() {
-    readp "此操作将彻底删除 Sing-Box 核心、静态面板以及所有的配置。确定卸载？(y/N): " choice
-    if [[ "$choice" =~ ^[Yy]$ ]]; then
-        systemctl stop sing-box >/dev/null 2>&1
-        systemctl disable sing-box >/dev/null 2>&1
-        rm -f /etc/systemd/system/sing-box.service
         systemctl daemon-reload >/dev/null 2>&1
-        
-        rm -rf "$SB_DIR"
-        rm -f "$SB_BIN"
-        
-        success "Sing-Box 及其专属托管 Web 控制面板已从系统中彻底清除！"
+        systemctl enable sing-box >/dev/null 2>&1
+        systemctl restart sing-box >/dev/null 2>&1
+    fi
+    success "开机自启系统服务注册成功！"
+}
+
+# 创建 sb 命令行实用工具
+create_sb_shortcut() {
+    cat > "$SB_SHORTCUT" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ====================================================================
+#  Sing-Box 面板自建本地管理进程 (sb)
+# ====================================================================
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;36m'
+PURPLE='\033[0;35m'
+PLAIN='\033[0m'
+
+CONFIG_PATH="/etc/sing-box/config.json"
+SS_URI_PATH="/etc/sing-box/ss_uri.txt"
+SB_BIN="/usr/bin/sing-box"
+
+info() { echo -e "${BLUE}[信息]${PLAIN} $*"; }
+success() { echo -e "${GREEN}[成功]${PLAIN} $*"; }
+warn() { echo -e "${YELLOW}[警告]${PLAIN} $*"; }
+error() { echo -e "${RED}[错误]${PLAIN} $*"; }
+readp() { read -p "$(echo -e "${YELLOW}$1${PLAIN}")" $2; }
+
+detect_service_system() {
+    if [ -x "$(command -v rc-service)" ]; then
+        INIT_SYSTEM="openrc"
     else
-        info "卸载已取消。"
+        INIT_SYSTEM="systemd"
     fi
 }
+detect_service_system
 
-# 服务状态控制
 manage_service() {
-    echo -e "\n${BLUE}--- 服务控制选项 ---${PLAIN}"
-    echo "1. 重启 Sing-Box 核心服务"
-    echo "2. 停止 Sing-Box 服务"
-    echo "3. 启动 Sing-Box 服务"
-    echo "0. 返回主菜单"
-    readp "请选择: " s_choice
-    case "$s_choice" in
-        1)
-            systemctl restart sing-box && success "服务已成功重启。"
-            ;;
-        2)
-            systemctl stop sing-box && success "服务已停止。"
-            ;;
-        3)
-            systemctl start sing-box && success "服务已恢复运行。"
-            ;;
-        *)
-            show_menu
-            ;;
-    esac
+    local action="$1"
+    if [ "$INIT_SYSTEM" = "openrc" ]; then
+        rc-service sing-box "$action"
+    else
+        systemctl "$action" sing-box
+    fi
 }
 
-# 更改密钥与端口
-change_settings() {
-    if [ ! -f "$SB_CONFIG" ]; then
-        error "未检测到已安装的 Sing-Box 配置，请先执行安装。"
-        return
+get_public_ip() {
+    local ip=""
+    for url in "https://api.ipify.org" "https://ipinfo.io/ip" "https://icanhazip.com"; do
+        ip=$(curl -s --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]' || true)
+        if [ -n "$ip" ]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+    echo "YOUR_SERVER_IP"
+}
+
+to_urlsafe_base64() {
+    local input="$1"
+    printf "%s" "$input" | base64 | tr '+/' '-_' | tr -d '=' | tr -d '\n\r'
+}
+
+# 1. 查看控制面板及节点连接信息
+action_view_info() {
+    [ -f "$CONFIG_PATH" ] || { error "配置文件不存在！"; return 1; }
+    
+    local web_port=$(jq -r '.experimental.clash_api.external_controller' "$CONFIG_PATH" | cut -d':' -f2)
+    local secret=$(jq -r '.experimental.clash_api.secret' "$CONFIG_PATH")
+    local ss_port=$(jq -r '.inbounds[] | select(.tag == "ss-in") | .listen_port' "$CONFIG_PATH")
+    local ss_pwd=$(jq -r '.inbounds[] | select(.tag == "ss-in") | .password' "$CONFIG_PATH")
+    local mixed_port=$(jq -r '.inbounds[] | select(.tag == "mixed-in") | .listen_port' "$CONFIG_PATH")
+    local external_ip=$(get_public_ip)
+
+    # 重新生成最新 URI
+    local userinfo="2022-blake3-aes-128-gcm:${ss_pwd}"
+    local encoded_userinfo=$(to_urlsafe_base64 "$userinfo")
+    local ss_uri="ss://${encoded_userinfo}@${external_ip}:${ss_port}#singbox-ss2022"
+    echo "$ss_uri" > "$SS_URI_PATH"
+
+    echo -e "\n${BLUE}==================================================${PLAIN}"
+    echo -e "       🌌 Sing-Box Web 自托管服务运行数据"
+    echo -e "${BLUE}==================================================${PLAIN}"
+    echo -e "💻 静态面板 URL 地址 : ${GREEN}http://${external_ip}:${web_port}/ui/${PLAIN}"
+    echo -e "🔑 面板安全通信 Secret: ${PURPLE}${secret}${PLAIN}"
+    echo -e "🔌 Shadowsocks 监听端口: ${BLUE}${ss_port}${PLAIN}"
+    echo -e "🔑 Shadowsocks 密码密钥: ${BLUE}${ss_pwd}${PLAIN}"
+    echo -e "🔌 Mixed 混合代理监听端口: ${BLUE}${mixed_port}${PLAIN}"
+    echo -e "--------------------------------------------------"
+    echo -e "🔗 Shadowsocks 2022 节点 URI 地址 :"
+    echo -e "   ${GREEN}${ss_uri}${PLAIN}"
+    echo -e "${BLUE}==================================================${PLAIN}"
+}
+
+# 2. 修改端口/访问密钥
+action_reset_port_pwd() {
+    [ -f "$CONFIG_PATH" ] || { error "配置文件不存在！"; return 1; }
+    
+    echo -e "\n${BLUE}--- 重置网络端口与安全配置 (留空回车则维持原样) ---${PLAIN}"
+    readp "请输入新的 Web 面板监听端口: " new_web_port
+    readp "请输入新的 Web 连接安全密钥 Secret: " new_secret
+    readp "请输入新的 Shadowsocks 2022 代理端口: " new_ss_port
+    readp "请输入新的 Shadowsocks 2022 访问密码: " new_ss_pwd
+    readp "请输入新的 Mixed 混合监听代理端口: " new_mixed_port
+
+    if [[ -n "$new_web_port" ]]; then
+        jq ".experimental.clash_api.external_controller = \"0.0.0.0:${new_web_port}\"" "$CONFIG_PATH" > "${CONFIG_PATH}.tmp" && mv "${CONFIG_PATH}.tmp" "$CONFIG_PATH"
     fi
-    
-    echo -e "\n${BLUE}--- 修改面板及代理配置 ---${PLAIN}"
-    readp "请输入新的 Web 访问端口: " new_port
-    readp "请输入新的 Web 连接密钥 (Secret): " new_secret
-    readp "请输入新的混合监听代理端口: " new_mixed_port
-    
-    if [[ -n "$new_port" ]]; then
-        jq ".experimental.clash_api.external_controller = \"0.0.0.0:${new_port}\"" "$SB_CONFIG" > "${SB_CONFIG}.tmp" && mv "${SB_CONFIG}.tmp" "$SB_CONFIG"
-    fi
-    
     if [[ -n "$new_secret" ]]; then
-        jq ".experimental.clash_api.secret = \"${new_secret}\"" "$SB_CONFIG" > "${SB_CONFIG}.tmp" && mv "${SB_CONFIG}.tmp" "$SB_CONFIG"
+        jq ".experimental.clash_api.secret = \"${new_secret}\"" "$CONFIG_PATH" > "${CONFIG_PATH}.tmp" && mv "${CONFIG_PATH}.tmp" "$CONFIG_PATH"
     fi
-
+    if [[ -n "$new_ss_port" ]]; then
+        jq "(.inbounds[] | select(.tag == \"ss-in\") | .listen_port) = ${new_ss_port}" "$CONFIG_PATH" > "${CONFIG_PATH}.tmp" && mv "${CONFIG_PATH}.tmp" "$CONFIG_PATH"
+    fi
+    if [[ -n "$new_ss_pwd" ]]; then
+        jq "(.inbounds[] | select(.tag == \"ss-in\") | .password) = \"${new_ss_pwd}\"" "$CONFIG_PATH" > "${CONFIG_PATH}.tmp" && mv "${CONFIG_PATH}.tmp" "$CONFIG_PATH"
+    fi
     if [[ -n "$new_mixed_port" ]]; then
-        jq ".inbounds[0].listen_port = ${new_mixed_port}" "$SB_CONFIG" > "${SB_CONFIG}.tmp" && mv "${SB_CONFIG}.tmp" "$SB_CONFIG"
+        jq "(.inbounds[] | select(.tag == \"mixed-in\") | .listen_port) = ${new_mixed_port}" "$CONFIG_PATH" > "${CONFIG_PATH}.tmp" && mv "${CONFIG_PATH}.tmp" "$CONFIG_PATH"
     fi
 
-    systemctl restart sing-box
-    success "参数更新成功，Sing-Box 已经重启应用新配置。"
+    info "正在重启守护服务加载新配置中..."
+    manage_service restart
+    success "面板配置重构更新成功！"
+    action_view_info
 }
 
-# 查看运行日志
-show_logs() {
-    info "正在调取 Systemd 实时服务运行日志 (按 Ctrl+C 即可退出查看)..."
+# 3. 查看实时服务运行日志
+action_view_logs() {
+    info "正在调取进程控制台输出流 (按 Ctrl+C 退出)..."
     sleep 1
-    journalctl -u sing-box.service -f -n 50
+    if [ "$INIT_SYSTEM" = "openrc" ]; then
+        tail -f -n 50 /var/log/sing-box.err 2>/dev/null || tail -f -n 50 /var/log/sing-box.log
+    else
+        journalctl -u sing-box -f -n 50 --no-pager
+    fi
 }
 
-# 显示主菜单
-show_menu() {
+# 4. 手动在线升级 Sing-box 核心
+action_upgrade() {
+    info "正在检测并连接官方仓库进行核心升级..."
+    local latest_ver=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -r .tag_name)
+    if [ -z "$latest_ver" ] || [ "$latest_ver" = "null" ]; then
+        error "无法连接至 GitHub API 获取最新版本。"
+        return 1
+    fi
+    local ver_num="${latest_ver#v}"
+    local arch=""
+    case $(uname -m) in
+        x86_64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+    esac
+
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_ver}/sing-box-${ver_num}-linux-${arch}.tar.gz"
+    local temp_dir=$(mktemp -d)
+    if ! wget -q --show-progress -O "${temp_dir}/sing-box.tar.gz" "$download_url"; then
+        error "更新升级包下载失败！"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    manage_service stop
+    tar -zxf "${temp_dir}/sing-box.tar.gz" -C "$temp_dir"
+    cp $(find "$temp_dir" -type f -name "sing-box" | head -n 1) "$SB_BIN"
+    chmod +x "$SB_BIN"
+    rm -rf "$temp_dir"
+    
+    manage_service start
+    success "核心组件成功热升级至最新版本: ${latest_ver}"
+}
+
+# 5. 卸载清除
+action_uninstall() {
+    info "正在停止进程并撤销开机自启..."
+    manage_service stop >/dev/null 2>&1 || true
+    if [ "$INIT_SYSTEM" = "openrc" ]; then
+        rc-update del sing-box default >/dev/null 2>&1 || true
+        rm -f /etc/init.d/sing-box
+    else
+        systemctl disable sing-box >/dev/null 2>&1 || true
+        rm -f /etc/systemd/system/sing-box.service
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    rm -rf /etc/sing-box /usr/local/bin/sb "$SB_BIN"
+    success "Sing-Box 核心服务与 Web 控制面板已完全卸载并清除残留！"
+}
+
+# 6. 编辑原始 JSON
+action_edit_json() {
+    local editor="${EDITOR:-vi}"
+    if command -v nano >/dev/null 2>&1; then
+        editor="nano"
+    fi
+    $editor "$CONFIG_PATH"
+    
+    info "正在校验配置文件完整性..."
+    if "$SB_BIN" check -c "$CONFIG_PATH" >/dev/null 2>&1; then
+        success "配置文件校验无误，正在重启服务应用更改..."
+        manage_service restart
+    else
+        error "新配置文件语法不符合规范，服务未重启。请重新检查修改！"
+    fi
+}
+
+show_interactive_menu() {
     clear
     echo -e "${PURPLE}==================================================${PLAIN}"
-    echo -e "${PURPLE}    🌌 Sing-Box 纯净安装 & 官方级 Web 托管面板 ${PLAIN}"
+    echo -e "${PURPLE}    🌌 Sing-Box Web自托管服务 本地交互命令行 (sb) ${PLAIN}"
     echo -e "${PURPLE}==================================================${PLAIN}"
-    echo -e " 1. 一键安装 Sing-Box & 官方托管 MetaCubeXD 面板"
-    echo -e " 2. 彻底卸载 Sing-Box 及 Web 面板"
-    echo -e "--------------------------------------------------"
-    echo -e " 3. 管理 Sing-Box 服务的 运行/停止/重启"
-    echo -e " 4. 实时查看 Sing-Box 核心系统运行日志"
-    echo -e " 5. 变更 面板端口 / 安全密钥 (Secret) / 代理监听"
-    echo -e " 6. 🛠️ 一键诊断核心启动失败原因并执行自动修复"
-    echo -e "--------------------------------------------------"
-    echo -e " 0. 退出脚本"
+    echo -e " 1. 查看 静态面板访问路径 / 安全 Secret / 节点连接"
+    echo -e " 2. 修改/重置 面板端口、安全通信Secret及代理端口"
+    echo -e " 3. 管理 核心系统服务 (启动/停止/重启)"
+    echo -e " 4. 实时 查看后端服务控制台运行日志"
+    echo -e " 5. 手动 在线热升级 Sing-Box 核心组件"
+    echo -e " 6. 打开 原始配置文件 (JSON) 文本编辑器"
+    echo -e " 7. 彻底 卸载并清除 Sing-Box 核心与 Web 面板"
+    echo -e " 0. 退出控制面板"
     echo -e "${PURPLE}==================================================${PLAIN}"
     
-    # 检测运行状态
-    if [ -f "$SB_BIN" ]; then
-        if systemctl is-active --quiet sing-box; then
-            echo -e "当前核心状态: ${GREEN}运行中 (Active)${PLAIN}"
-            # 动态获取配置文件中的 Web 控制器端口和 Secret
-            local cur_port=$(jq -r '.experimental.clash_api.external_controller' "$SB_CONFIG" 2>/dev/null | cut -d':' -f2)
-            local cur_secret=$(jq -r '.experimental.clash_api.secret' "$SB_CONFIG" 2>/dev/null)
-            echo -e "面板访问路径: ${BLUE}http://服务器IP:${cur_port}/ui/${PLAIN}"
-            echo -e "当前访问密钥: ${PURPLE}${cur_secret}${PLAIN}"
+    if [ "$INIT_SYSTEM" = "openrc" ]; then
+        if rc-service sing-box status 2>/dev/null | grep -q "started"; then
+            echo -e "运行状态: ${GREEN}运行中 (Active)${PLAIN}"
         else
-            echo -e "当前核心状态: ${RED}未运行 (Stopped)${PLAIN}"
+            echo -e "运行状态: ${RED}未运行 (Stopped)${PLAIN}"
         fi
     else
-        echo -e "当前核心状态: ${RED}未安装${PLAIN}"
+        if systemctl is-active --quiet sing-box; then
+            echo -e "运行状态: ${GREEN}运行中 (Active)${PLAIN}"
+        else
+            echo -e "运行状态: ${RED}未运行 (Stopped)${PLAIN}"
+        fi
     fi
-    echo "=================================================="
-    
-    readp "请输入您的选择 [0-6]: " main_choice
-    case "$main_choice" in
-        1) install_singbox ;;
-        2) uninstall_singbox ;;
-        3) manage_service ;;
-        4) show_logs ;;
-        5) change_settings ;;
-        6) diagnose_failures ;;
+    echo -e "=================================================="
+
+    readp "请输入您的指令 [0-7]: " menu_choice
+    case "$menu_choice" in
+        1) action_view_info ;;
+        2) action_reset_port_pwd ;;
+        3) 
+            echo -e "\n1. 重启服务  2. 停止服务  3. 启动服务"
+            readp "请选择: " cmd_act
+            [[ "$cmd_act" = "1" ]] && { manage_service restart && success "重启成功！"; }
+            [[ "$cmd_act" = "2" ]] && { manage_service stop && success "停止成功！"; }
+            [[ "$cmd_act" = "3" ]] && { manage_service start && success "启动成功！"; }
+            ;;
+        4) action_view_logs ;;
+        5) action_upgrade ;;
+        6) action_edit_json ;;
+        7) action_uninstall; exit 0 ;;
         0) exit 0 ;;
-        *) error "输入错误，请重新选择！" && sleep 1 && show_menu ;;
+        *) error "指令输入错误，请重新选择！" && sleep 1 ;;
     esac
 }
 
-# 循环保持
 while true; do
-    show_menu
-    echo -e "\n按任意键返回主菜单..."
+    show_interactive_menu
+    echo -e "\n回车按任意键继续返回主菜单..."
     read -n 1
 done
+EOF
+    chmod +x "$SB_SHORTCUT"
+}
+
+# 启动一键部署流程
+install_main

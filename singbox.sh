@@ -7,8 +7,8 @@
 #  主要特点: 
 #    1. 自动部署官方最新 Sing-Box 核心 + 自托管 3x-ui 质感控制大盘
 #    2. 零外部 Web 容器依赖 (采用 Python3 stdlib 守护进程，零端口冲突)
-#    3. 预设安全 Shadowsocks 2022、VLESS-Reality、Hysteria2、TUIC 管理
-#    4. 支持 Raw JSON 安全校验编辑器，防范因配置错误导致核心闪退
+#    3. 网页全自动表单管理 VLESS-Reality-XHTTP、Hysteria2、TUIC、SS
+#    4. 支持表单与配置 Dry-Run 安全校验，防范因配置错误导致核心闪退
 #    5. 终端输入 sb 即可快捷管理，包含一键自愈与诊断修复工具
 # ====================================================================
 
@@ -207,7 +207,7 @@ HTML_CONTENT = """<!DOCTYPE html>
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-none bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-purple-200">Sing-Box Panel</h1>
-                <span class="text-xs text-indigo-400 font-medium">3x-ui 极简融合版</span>
+                <span class="text-xs text-indigo-400 font-medium">可视化面板控制系统</span>
             </div>
         </div>
         
@@ -268,8 +268,8 @@ HTML_CONTENT = """<!DOCTYPE html>
             <div class="glass-card rounded-3xl p-6 shadow-xl space-y-3">
                 <h4 class="text-sm font-bold text-slate-300">进程控制</h4>
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="triggerService('start')" class="py-2.5 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 rounded-xl text-xs font-bold transition-all">启动守护</button>
-                    <button onclick="triggerService('stop')" class="py-2.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 rounded-xl text-xs font-bold transition-all">停止守护</button>
+                    <button onclick="triggerService('start')" class="py-2.5 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 rounded-xl text-xs font-bold transition-all">启动核心</button>
+                    <button onclick="triggerService('stop')" class="py-2.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 rounded-xl text-xs font-bold transition-all">停止核心</button>
                 </div>
             </div>
         </section>
@@ -284,10 +284,20 @@ HTML_CONTENT = """<!DOCTYPE html>
                         <i data-lucide="server" class="w-6 h-6 text-indigo-400"></i>
                         <h2 class="text-xl font-bold text-slate-200">已部署入站节点列表</h2>
                     </div>
-                    <button onclick="openRawEditor()" class="flex items-center space-x-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all">
-                        <i data-lucide="edit-3" class="w-4 h-4"></i>
-                        <span>高级 JSON 编辑</span>
-                    </button>
+                    <div class="flex space-x-2">
+                        <button onclick="openPanelSettingsModal()" class="flex items-center space-x-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-755 text-slate-300 rounded-xl text-xs font-bold transition-all">
+                            <i data-lucide="settings" class="w-4 h-4"></i>
+                            <span>面板设置</span>
+                        </button>
+                        <button onclick="openRawEditor()" class="flex items-center space-x-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-755 text-slate-300 rounded-xl text-xs font-bold transition-all">
+                            <i data-lucide="code" class="w-4 h-4"></i>
+                            <span>原始 JSON</span>
+                        </button>
+                        <button onclick="openAddNodeModal()" class="flex items-center space-x-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <span>添加节点</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div id="nodesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -322,6 +332,238 @@ HTML_CONTENT = """<!DOCTYPE html>
         </section>
 
     </main>
+
+    <!-- Visual Add/Edit Node Modal -->
+    <div id="visualNodeModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-card w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-4 my-8">
+            <h3 id="modalTitle" class="text-lg font-bold text-slate-200">添加 Sing-Box 入站节点</h3>
+            <input type="hidden" id="nodeIndex">
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">备注 / 标签(Tag)</label>
+                    <input type="text" id="nodeTag" placeholder="如 ss-16759" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">监听端口</label>
+                    <input type="number" id="nodePort" placeholder="如 443" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">协议 (Protocol)</label>
+                    <select id="nodeProtocol" onchange="onProtocolChange(this.value)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        <option value="shadowsocks">Shadowsocks</option>
+                        <option value="vless">VLESS</option>
+                        <option value="vmess">VMess</option>
+                        <option value="trojan">Trojan</option>
+                        <option value="hysteria2">Hysteria2</option>
+                        <option value="tuic">TUIC</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">监听 IP</label>
+                    <input type="text" id="nodeListen" value="::" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Shadowsocks section -->
+            <div id="sectionShadowsocks" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">加密算法 (Method)</label>
+                        <select id="ssMethod" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
+                            <option value="aes-128-gcm">aes-128-gcm</option>
+                            <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">密码 (Password)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="nodePassword" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <button type="button" onclick="generateRandomPass()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VLESS section -->
+            <div id="sectionVless" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">用户 UUID</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="vlessUuid" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <button type="button" onclick="generateUuid('vlessUuid')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">流控 (Flow)</label>
+                        <select id="vlessFlow" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <option value="none">无流控 (none)</option>
+                            <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VMess section -->
+            <div id="sectionVmess" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">用户 UUID</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="vmessUuid" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        <button type="button" onclick="generateUuid('vmessUuid')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TUIC section -->
+            <div id="sectionTuic" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">用户 UUID</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="tuicUuid" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <button type="button" onclick="generateUuid('tuicUuid')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">拥塞控制 (Congestion Control)</label>
+                        <select id="tuicBbr" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <option value="bbr">bbr</option>
+                            <option value="cubic">cubic</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- General Password section (Trojan, Hysteria2 etc.) -->
+            <div id="sectionGeneralPassword" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">访问密码 (Password)</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="genPassword" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        <button type="button" onclick="generateRandomPass('genPassword')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transport Setting Group -->
+            <div id="groupTransport" class="space-y-4 p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl">
+                <h4 class="text-xs font-bold text-slate-300">传输层协议设置 (Transport)</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">传输协议</label>
+                        <select id="nodeTransport" onchange="onTransportChange(this.value)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <option value="none">无 (tcp)</option>
+                            <option value="ws">WebSocket (ws)</option>
+                            <option value="grpc">gRPC</option>
+                            <option value="httpupgrade">HTTPUpgrade</option>
+                            <option value="xhttp">xHTTP (高性能推荐)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">路径 / ServiceName</label>
+                        <input type="text" id="transportPath" placeholder="如 /mypath" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- TLS & Reality Setting Group -->
+            <div id="groupTls" class="space-y-4 p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl">
+                <h4 class="text-xs font-bold text-slate-300">安全加密设置 (TLS / REALITY)</h4>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">加密类型</label>
+                    <select id="nodeTlsType" onchange="onTlsTypeChange(this.value)" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        <option value="none">不开启 (none)</option>
+                        <option value="tls">标准 TLS</option>
+                        <option value="reality">REALITY (无证书混淆)</option>
+                    </select>
+                </div>
+
+                <!-- Standard TLS -->
+                <div id="subSectionTls" class="space-y-3 hidden">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">服务器 SNI 域名</label>
+                        <input type="text" id="tlsSni" placeholder="如 yourdomain.com" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">证书全链文件路径 (.pem / .crt)</label>
+                            <input type="text" id="tlsCertPath" value="/etc/sing-box/certs/fullchain.pem" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">私钥文件路径 (.key)</label>
+                            <input type="text" id="tlsKeyPath" value="/etc/sing-box/certs/privkey.pem" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reality TLS -->
+                <div id="subSectionReality" class="space-y-3 hidden">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">目标服务器 SNI 域名 (如 mozilla)</label>
+                            <input type="text" id="realitySni" value="addons.mozilla.org" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">目标握手端口</label>
+                            <input type="number" id="realityPort" value="443" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Reality 私钥 (Private Key)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="realityPrivateKey" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-indigo-300 font-mono focus:outline-none">
+                            <button type="button" onclick="getRealityKeys()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold shrink-0">一键生成密钥</button>
+                        </div>
+                        <span id="realityPubKeyHint" class="text-[10px] text-indigo-400 block mt-1 font-mono"></span>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Reality 短 ID (Short ID)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="realityShortId" value="19eb85b3a371a4cc" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                            <button type="button" onclick="generateShortId()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-xl text-xs font-semibold">生成</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error display box for form saving -->
+            <div id="formErrorBox" class="hidden p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-mono"></div>
+
+            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-800/80">
+                <button type="button" onclick="closeModal('visualNodeModal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold">取消</button>
+                <button onclick="saveVisualNode()" class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold shadow-lg">保存应用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel Settings Modal -->
+    <div id="panelSettingsModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 class="text-lg font-bold text-slate-200">修改 Web 管理面板参数</h3>
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">登录用户名</label>
+                <input type="text" id="panelUser" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">登录密码</label>
+                <input type="text" id="panelPass" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">访问监听端口</label>
+                <input type="number" id="panelPort" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+            </div>
+            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-800/80">
+                <button type="button" onclick="closeModal('panelSettingsModal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-semibold">取消</button>
+                <button onclick="savePanelSettings()" class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold">更新重启</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Raw JSON Editor Modal -->
     <div id="rawEditorModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -367,6 +609,51 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         function closeModal(id) {
             document.getElementById(id).classList.add('hidden');
+        }
+
+        // Random generator helpers
+        function generateRandomPass(elementId = 'nodePassword') {
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let pwd = '';
+            for(let i=0; i<16; i++) {
+                pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById(elementId).value = pwd;
+        }
+
+        function generateUuid(elementId) {
+            let uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+            document.getElementById(elementId).value = uuid;
+        }
+
+        function generateShortId() {
+            const chars = '0123456789abcdef';
+            let sid = '';
+            for(let i=0; i<8; i++) {
+                sid += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('realityShortId').value = sid;
+        }
+
+        // Fetch system Reality Key pair via backend API
+        async function getRealityKeys() {
+            showToast("正在后台申请 Curve25519 密钥对...");
+            try {
+                const res = await fetch('/api/generate-reality');
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('realityPrivateKey').value = data.private_key;
+                    document.getElementById('realityPubKeyHint').innerText = "客户端 Public Key (请复制留存): " + data.public_key;
+                    showToast("密钥生成成功！客户端公钥已展现在下方。");
+                } else {
+                    showToast("密钥获取失败: " + data.error);
+                }
+            } catch(e) {
+                showToast("连接生成 API 异常。");
+            }
         }
 
         // Fetch System Stats & Logs
@@ -443,14 +730,14 @@ HTML_CONTENT = """<!DOCTYPE html>
             }
         }
 
-        // Render nodes cards
+        // Render nodes cards with Edit & Delete actions
         function renderInbounds() {
             const grid = document.getElementById('nodesGrid');
             grid.innerHTML = '';
             
             const inbounds = currentConfig.inbounds || [];
             if(inbounds.length === 0) {
-                grid.innerHTML = `<div class="col-span-2 text-center text-xs text-slate-500 py-6">暂无任何入站节点</div>`;
+                grid.innerHTML = `<div class="col-span-2 text-center text-xs text-slate-500 py-12">暂无任何入站节点，请点击右上角添加。</div>`;
                 return;
             }
 
@@ -461,26 +748,36 @@ HTML_CONTENT = """<!DOCTYPE html>
                 if(ib.type === 'vless') badgeColor = "from-emerald-600 to-teal-600";
 
                 const isTls = ib.tls && ib.tls.enabled;
+                const isReality = isTls && ib.tls.reality && ib.tls.reality.enabled;
 
                 let infoHTML = `
                     <div class="flex justify-between py-1 border-b border-slate-800/40">
-                        <span class="text-slate-400">网络加密:</span>
-                        <span class="font-medium ${isTls ? 'text-emerald-400' : 'text-slate-500'}">${isTls ? '开启' : '关闭'}</span>
+                        <span class="text-slate-400">加密状态:</span>
+                        <span class="font-medium ${isTls ? 'text-emerald-400' : 'text-slate-500'}">${isReality ? 'REALITY' : (isTls ? 'TLS' : '无加密')}</span>
                     </div>
                 `;
+
+                if(ib.transport && ib.transport.type) {
+                    infoHTML += `
+                        <div class="flex justify-between py-1 border-b border-slate-800/40">
+                            <span class="text-slate-400">传输层:</span>
+                            <span class="font-medium text-purple-400 uppercase font-mono text-[11px]">${ib.transport.type}</span>
+                        </div>
+                    `;
+                }
 
                 if(ib.type === 'shadowsocks') {
                     infoHTML += `
                         <div class="flex justify-between py-1">
-                            <span class="text-slate-400">加密套件:</span>
+                            <span class="text-slate-400">算法套件:</span>
                             <span class="font-medium text-indigo-400 font-mono text-[11px]">${ib.method}</span>
                         </div>
                     `;
                 } else if(ib.type === 'vless') {
                     infoHTML += `
                         <div class="flex justify-between py-1">
-                            <span class="text-slate-400">流控算法:</span>
-                            <span class="font-medium text-indigo-400 font-mono text-[11px]">${ib.users[0].flow || '无'}</span>
+                            <span class="text-slate-400">流控特征:</span>
+                            <span class="font-medium text-indigo-400 font-mono text-[11px]">${ib.users?.[0]?.flow || '无'}</span>
                         </div>
                     `;
                 }
@@ -493,10 +790,17 @@ HTML_CONTENT = """<!DOCTYPE html>
                                     <span class="px-2.5 py-1 text-[10px] font-bold text-white bg-gradient-to-tr ${badgeColor} rounded-xl uppercase tracking-wider">${ib.type}</span>
                                     <span class="text-sm font-bold text-slate-300">端口: ${ib.listen_port}</span>
                                 </div>
-                                <span class="text-xs text-slate-500 font-mono">#${ib.tag || idx}</span>
+                                <div class="flex space-x-1.5">
+                                    <button onclick="editVisualNode(${idx})" class="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="deleteNode(${idx})" class="p-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                                </div>
                             </div>
 
                             <div class="mt-4 space-y-1.5 text-xs">
+                                <div class="flex justify-between py-1 border-b border-slate-800/40">
+                                    <span class="text-slate-400">备注/Tag:</span>
+                                    <span class="font-semibold text-slate-300 truncate max-w-[120px]">${ib.tag || '无'}</span>
+                                </div>
                                 ${infoHTML}
                             </div>
                         </div>
@@ -504,7 +808,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                         <div class="pt-3 border-t border-slate-800/60 flex space-x-2">
                             <button onclick="shareNode(${idx})" class="flex-1 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-1">
                                 <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-                                <span>获取链接</span>
+                                <span>生成分享链接</span>
                             </button>
                         </div>
                     </div>
@@ -514,7 +818,326 @@ HTML_CONTENT = """<!DOCTYPE html>
             lucide.createIcons();
         }
 
-        // Parse & generate connection share link
+        // Protocol dropdown dynamic UI trigger
+        function onProtocolChange(protocol) {
+            document.getElementById('sectionShadowsocks').classList.add('hidden');
+            document.getElementById('sectionVless').classList.add('hidden');
+            document.getElementById('sectionVmess').classList.add('hidden');
+            document.getElementById('sectionTuic').classList.add('hidden');
+            document.getElementById('sectionGeneralPassword').classList.add('hidden');
+
+            document.getElementById('groupTransport').classList.add('hidden');
+            document.getElementById('groupTls').classList.add('hidden');
+
+            if(protocol === 'shadowsocks') {
+                document.getElementById('sectionShadowsocks').classList.remove('hidden');
+            } else if(protocol === 'vless') {
+                document.getElementById('sectionVless').classList.remove('hidden');
+                document.getElementById('groupTransport').classList.remove('hidden');
+                document.getElementById('groupTls').classList.remove('hidden');
+            } else if(protocol === 'vmess') {
+                document.getElementById('sectionVmess').classList.remove('hidden');
+                document.getElementById('groupTransport').classList.remove('hidden');
+                document.getElementById('groupTls').classList.remove('hidden');
+            } else if(protocol === 'tuic') {
+                document.getElementById('sectionTuic').classList.remove('hidden');
+                document.getElementById('sectionGeneralPassword').classList.remove('hidden');
+            } else if(protocol === 'hysteria2') {
+                document.getElementById('sectionGeneralPassword').classList.remove('hidden');
+            } else if(protocol === 'trojan') {
+                document.getElementById('sectionGeneralPassword').classList.remove('hidden');
+                document.getElementById('groupTransport').classList.remove('hidden');
+                document.getElementById('groupTls').classList.remove('hidden');
+            }
+        }
+
+        function onTransportChange(val) {
+            const pathInput = document.getElementById('transportPath');
+            if(val === 'none') {
+                pathInput.disabled = true;
+                pathInput.placeholder = "无需配置路径";
+                pathInput.value = '';
+            } else if(val === 'grpc') {
+                pathInput.disabled = false;
+                pathInput.placeholder = "如 grpc-service-name";
+            } else {
+                pathInput.disabled = false;
+                pathInput.placeholder = "如 /mypath";
+            }
+        }
+
+        function onTlsTypeChange(val) {
+            document.getElementById('subSectionTls').classList.add('hidden');
+            document.getElementById('subSectionReality').classList.add('hidden');
+
+            if(val === 'tls') {
+                document.getElementById('subSectionTls').classList.remove('hidden');
+            } else if(val === 'reality') {
+                document.getElementById('subSectionReality').classList.remove('hidden');
+            }
+        }
+
+        // Open Node creation modal
+        function openAddNodeModal() {
+            document.getElementById('modalTitle').innerText = "添加 Sing-Box 入站协议";
+            document.getElementById('nodeIndex').value = "";
+            document.getElementById('nodeTag').value = "";
+            document.getElementById('nodePort').value = Math.floor(Math.random() * 40000) + 10000;
+            document.getElementById('nodeProtocol').value = "shadowsocks";
+            
+            document.getElementById('nodeListen').value = "::";
+            document.getElementById('nodePassword').value = "";
+            document.getElementById('vlessUuid').value = "";
+            document.getElementById('vlessFlow').value = "none";
+            document.getElementById('vmessUuid').value = "";
+            document.getElementById('tuicUuid').value = "";
+            document.getElementById('tuicBbr').value = "bbr";
+            document.getElementById('genPassword').value = "";
+            document.getElementById('nodeTransport').value = "none";
+            document.getElementById('transportPath').value = "";
+            document.getElementById('nodeTlsType').value = "none";
+
+            document.getElementById('tlsCertPath').value = "/etc/sing-box/certs/fullchain.pem";
+            document.getElementById('tlsKeyPath').value = "/etc/sing-box/certs/privkey.pem";
+            document.getElementById('tlsSni').value = "";
+
+            document.getElementById('realitySni').value = "addons.mozilla.org";
+            document.getElementById('realityServer').value = "addons.mozilla.org";
+            document.getElementById('realityPort').value = "443";
+            document.getElementById('realityPrivateKey').value = "";
+            document.getElementById('realityShortId').value = "19eb85b3a371a4cc";
+            document.getElementById('realityPubKeyHint').innerText = "";
+
+            onProtocolChange('shadowsocks');
+            onTransportChange('none');
+            onTlsTypeChange('none');
+
+            document.getElementById('formErrorBox').classList.add('hidden');
+            document.getElementById('visualNodeModal').classList.remove('hidden');
+        }
+
+        // Open Node Edit Modal (populating values from JSON)
+        function editVisualNode(idx) {
+            const ib = currentConfig.inbounds[idx];
+            document.getElementById('modalTitle').innerText = "编辑入站协议 (Index: " + idx + ")";
+            document.getElementById('nodeIndex').value = idx;
+            document.getElementById('nodeTag').value = ib.tag || "";
+            document.getElementById('nodePort').value = ib.listen_port || "";
+            document.getElementById('nodeProtocol').value = ib.type;
+            document.getElementById('nodeListen').value = ib.listen || "::";
+
+            // Reset Sub sections
+            onProtocolChange(ib.type);
+
+            if(ib.type === 'shadowsocks') {
+                document.getElementById('ssMethod').value = ib.method || '2022-blake3-aes-128-gcm';
+                document.getElementById('nodePassword').value = ib.password || '';
+            } else if(ib.type === 'vless') {
+                document.getElementById('vlessUuid').value = ib.users?.[0]?.uuid || '';
+                document.getElementById('vlessFlow').value = ib.users?.[0]?.flow || 'none';
+            } else if(ib.type === 'vmess') {
+                document.getElementById('vmessUuid').value = ib.users?.[0]?.uuid || '';
+            } else if(ib.type === 'tuic') {
+                document.getElementById('tuicUuid').value = ib.users?.[0]?.uuid || '';
+                document.getElementById('genPassword').value = ib.users?.[0]?.password || '';
+                document.getElementById('tuicBbr').value = ib.congestion_control || 'bbr';
+            } else if(ib.type === 'hysteria2') {
+                document.getElementById('genPassword').value = ib.users?.[0]?.password || '';
+            } else if(ib.type === 'trojan') {
+                document.getElementById('genPassword').value = ib.users?.[0]?.password || ib.password || '';
+            }
+
+            // Transport Setup
+            if(ib.transport) {
+                document.getElementById('nodeTransport').value = ib.transport.type || 'none';
+                document.getElementById('transportPath').value = ib.transport.path || ib.transport.service_name || '';
+                onTransportChange(ib.transport.type);
+            } else {
+                document.getElementById('nodeTransport').value = 'none';
+                document.getElementById('transportPath').value = '';
+                onTransportChange('none');
+            }
+
+            // TLS setup
+            if(ib.tls && ib.tls.enabled) {
+                if(ib.tls.reality && ib.tls.reality.enabled) {
+                    document.getElementById('nodeTlsType').value = 'reality';
+                    document.getElementById('realitySni').value = ib.tls.server_name || '';
+                    document.getElementById('realityServer').value = ib.tls.reality.handshake?.server || '';
+                    document.getElementById('realityPort').value = ib.tls.reality.handshake?.server_port || '443';
+                    document.getElementById('realityPrivateKey').value = ib.tls.reality.private_key || '';
+                    document.getElementById('realityShortId').value = ib.tls.reality.short_id?.[0] || '';
+                    document.getElementById('realityPubKeyHint').innerText = "";
+                    onTlsTypeChange('reality');
+                } else {
+                    document.getElementById('nodeTlsType').value = 'tls';
+                    document.getElementById('tlsSni').value = ib.tls.server_name || '';
+                    document.getElementById('tlsCertPath').value = ib.tls.certificate_path || '';
+                    document.getElementById('tlsKeyPath').value = ib.tls.key_path || '';
+                    onTlsTypeChange('tls');
+                }
+            } else {
+                document.getElementById('nodeTlsType').value = 'none';
+                onTlsTypeChange('none');
+            }
+
+            document.getElementById('formErrorBox').classList.add('hidden');
+            document.getElementById('visualNodeModal').classList.remove('hidden');
+        }
+
+        // Delete visual node from memory and sync with backend
+        async function deleteNode(idx) {
+            if(!confirm("确定要删除该入站配置吗？这将立刻断开绑定该端口的客户端。")) return;
+            currentConfig.inbounds.splice(idx, 1);
+            showToast("正在删除并同步修改...");
+            await syncConfigWithBackend(currentConfig);
+        }
+
+        // Save Visual Node values into memory
+        async function saveVisualNode() {
+            const idx = document.getElementById('nodeIndex').value;
+            const tag = document.getElementById('nodeTag').value;
+            const port = parseInt(document.getElementById('nodePort').value);
+            const protocol = document.getElementById('nodeProtocol').value;
+            const listen = document.getElementById('nodeListen').value || "::";
+
+            if(!port || isNaN(port)) {
+                alert("请输入合法的监听端口！");
+                return;
+            }
+
+            let inbound = {
+                "type": protocol,
+                "tag": tag || (protocol + "-" + port),
+                "listen": listen,
+                "listen_port": port
+            };
+
+            // Protocol logic
+            if(protocol === 'shadowsocks') {
+                inbound.method = document.getElementById('ssMethod').value;
+                inbound.password = document.getElementById('nodePassword').value;
+                if(!inbound.password) { alert("Shadowsocks 密码不可为空！"); return;}
+            } else if(protocol === 'vless') {
+                const uuid = document.getElementById('vlessUuid').value;
+                if(!uuid) { alert("VLESS UUID不可为空！"); return;}
+                const flow = document.getElementById('vlessFlow').value;
+                inbound.users = [{
+                    "uuid": uuid,
+                    "flow": flow !== 'none' ? flow : undefined
+                }];
+            } else if(protocol === 'vmess') {
+                const uuid = document.getElementById('vmessUuid').value;
+                if(!uuid) { alert("VMess UUID不可为空！"); return;}
+                inbound.users = [{ "uuid": uuid }];
+            } else if(protocol === 'tuic') {
+                const uuid = document.getElementById('tuicUuid').value;
+                const password = document.getElementById('genPassword').value;
+                if(!uuid || !password) { alert("TUIC 密码与 UUID 均不可为空！"); return;}
+                inbound.users = [{ "uuid": uuid, "password": password }];
+                inbound.congestion_control = document.getElementById('tuicBbr').value;
+            } else if(protocol === 'hysteria2') {
+                const password = document.getElementById('genPassword').value;
+                if(!password) { alert("Hysteria2 密码不可为空！"); return;}
+                inbound.users = [{ "password": password }];
+            } else if(protocol === 'trojan') {
+                const password = document.getElementById('genPassword').value;
+                if(!password) { alert("Trojan 密码不可为空！"); return;}
+                inbound.users = [{ "password": password }];
+            }
+
+            // Transport protocol logic (VLESS / VMess / Trojan)
+            if(['vless', 'vmess', 'trojan'].includes(protocol)) {
+                const transport = document.getElementById('nodeTransport').value;
+                const path = document.getElementById('transportPath').value;
+                if(transport !== 'none') {
+                    inbound.transport = { "type": transport };
+                    if(transport === 'grpc') {
+                        inbound.transport.service_name = path || undefined;
+                    } else {
+                        inbound.transport.path = path || undefined;
+                    }
+                }
+            }
+
+            // TLS / Reality encryption logic
+            if(['vless', 'vmess', 'trojan', 'hysteria2', 'tuic'].includes(protocol)) {
+                let tlsType = document.getElementById('nodeTlsType').value;
+                // Force TLS for Hysteria2 / TUIC as it is natively required
+                if(['hysteria2', 'tuic'].includes(protocol)) {
+                    tlsType = 'tls';
+                }
+
+                if(tlsType === 'tls') {
+                    inbound.tls = {
+                        "enabled": true,
+                        "server_name": document.getElementById('tlsSni').value || undefined,
+                        "certificate_path": document.getElementById('tlsCertPath').value || undefined,
+                        "key_path": document.getElementById('tlsKeyPath').value || undefined
+                    };
+                } else if(tlsType === 'reality') {
+                    const privKey = document.getElementById('realityPrivateKey').value;
+                    const shortId = document.getElementById('realityShortId').value;
+                    if(!privKey) { alert("Reality 私钥不可为空！"); return; }
+                    inbound.tls = {
+                        "enabled": true,
+                        "server_name": document.getElementById('realitySni').value || undefined,
+                        "reality": {
+                            "enabled": true,
+                            "handshake": {
+                                "server": document.getElementById('realityServer').value || undefined,
+                                "server_port": parseInt(document.getElementById('realityPort').value) || 443
+                            },
+                            "private_key": privKey,
+                            "short_id": shortId ? [shortId] : []
+                        }
+                    };
+                }
+            }
+
+            // Save or Update in bounds array
+            if(!currentConfig.inbounds) currentConfig.inbounds = [];
+            if(idx !== "") {
+                currentConfig.inbounds[parseInt(idx)] = inbound;
+            } else {
+                currentConfig.inbounds.push(inbound);
+            }
+
+            // Push to backend with Dry-Run
+            showToast("正在通过 Sing-Box 核心进行配置验证 (Dry-Run)...");
+            const result = await syncConfigWithBackend(currentConfig);
+            if(result.success) {
+                closeModal('visualNodeModal');
+                fetchConfig();
+            } else {
+                const errBox = document.getElementById('formErrorBox');
+                errBox.className = "p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-mono";
+                errBox.innerText = "校验报错，请核对证书路径或配置项: " + result.error;
+            }
+        }
+
+        // Helper to push full config to Python API
+        async function syncConfigWithBackend(configData) {
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(configData)
+                });
+                const data = await res.json();
+                if(data.success) {
+                    showToast("配置保存并验证成功，Sing-Box 守护已重载！");
+                    setTimeout(() => { fetchLogs(); }, 1000);
+                    return { success: true };
+                } else {
+                    return { success: false, error: data.error };
+                }
+            } catch(e) {
+                return { success: false, error: "无法连接 API 守护服务。" };
+            }
+        }
+
+        // Parse & generate connection share link (Now supports high-end Reality + xHTTP)
         function shareNode(idx) {
             const ib = currentConfig.inbounds[idx];
             const host = window.location.hostname;
@@ -529,15 +1152,35 @@ HTML_CONTENT = """<!DOCTYPE html>
                 let params = `?type=tcp&flow=${flow}`;
                 if(ib.tls && ib.tls.reality && ib.tls.reality.enabled) {
                     params += `&security=reality&sni=${ib.tls.server_name}&pbk=${ib.tls.reality.private_key}&sid=${ib.tls.reality.short_id[0]}`;
+                } else if(ib.tls && ib.tls.enabled) {
+                    params += `&security=tls&sni=${ib.tls.server_name || ''}`;
+                }
+                if(ib.transport && ib.transport.type) {
+                    params += `&type=${ib.transport.type}`;
+                    if(ib.transport.type === 'grpc') {
+                        params += `&serviceName=${ib.transport.service_name || ''}`;
+                    } else {
+                        params += `&path=${ib.transport.path || ''}`;
+                    }
                 }
                 uri = `vless://${uuid}@${host}:${ib.listen_port}${params}#singbox-vless-${ib.listen_port}`;
+            } else if(ib.type === 'vmess') {
+                const uuid = ib.users[0].uuid;
+                let params = `?uuid=${uuid}`;
+                if(ib.tls && ib.tls.enabled) {
+                    params += `&security=tls&sni=${ib.tls.server_name || ''}`;
+                }
+                if(ib.transport && ib.transport.type) {
+                    params += `&type=${ib.transport.type}&path=${ib.transport.path || ''}`;
+                }
+                uri = `vmess://${uuid}@${host}:${ib.listen_port}${params}#singbox-vmess-${ib.listen_port}`;
             } else if(ib.type === 'hysteria2') {
                 const password = ib.users[0].password;
                 uri = `hysteria2://${password}@${host}:${ib.listen_port}?insecure=1#singbox-hy2-${ib.listen_port}`;
             } else if(ib.type === 'tuic') {
                 const uuid = ib.users[0].uuid;
                 const password = ib.users[0].password;
-                uri = `tuic://${uuid}:${password}@${host}:${ib.listen_port}?congestion_control=bbr&alpn=h3#singbox-tuic-${ib.listen_port}`;
+                uri = `tuic://${uuid}:${password}@${host}:${ib.listen_port}?congestion_control=${ib.congestion_control || 'bbr'}&alpn=h3#singbox-tuic-${ib.listen_port}`;
             } else {
                 uri = `${ib.type} 协议暂不支持通过此简单 URI 格式分享，请编辑底层 JSON 引用配置。`;
             }
@@ -576,25 +1219,58 @@ HTML_CONTENT = """<!DOCTYPE html>
             }
 
             showToast("正在向后端发送配置做校验（Dry-Run）...");
+            const result = await syncConfigWithBackend(parsed);
+            if(result.success) {
+                closeModal('rawEditorModal');
+                fetchConfig();
+            } else {
+                const errBox = document.getElementById('editorErrorBox');
+                errBox.className = "p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-mono mb-4 overflow-y-auto max-h-24";
+                errBox.innerText = "Sing-Box 验证（dry-run）不通过！核心拒绝接受此配置，报错详情：\\n\\n" + result.error;
+            }
+        }
+
+        // Open Panel Settings
+        async function openPanelSettingsModal() {
             try {
-                const res = await fetch('/api/config', {
+                const res = await fetch('/api/creds');
+                const data = await res.json();
+                document.getElementById('panelUser').value = data.username;
+                document.getElementById('panelPass').value = data.password;
+                document.getElementById('panelPort').value = data.port;
+                document.getElementById('panelSettingsModal').classList.remove('hidden');
+            } catch(e) {
+                showToast("无法读取面板凭证。");
+            }
+        }
+
+        // Save Panel Settings to backend
+        async function savePanelSettings() {
+            const username = document.getElementById('panelUser').value;
+            const password = document.getElementById('panelPass').value;
+            const port = parseInt(document.getElementById('panelPort').value);
+
+            if(!username || !password || !port) {
+                alert("各项设置均不可为空！");
+                return;
+            }
+
+            showToast("正在更新面板设置并重启 Web 服务...");
+            try {
+                const res = await fetch('/api/creds', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsed)
+                    body: JSON.stringify({ username, password, port })
                 });
                 const result = await res.json();
                 if(result.success) {
-                    showToast("核心配置校验通过并成功应用，Sing-Box 服务已热重启！");
-                    closeModal('rawEditorModal');
-                    fetchConfig();
-                    setTimeout(() => { fetchLogs(); }, 1500);
+                    showToast("凭证更新成功！3 秒后请使用新端口与密码重新登录。");
+                    closeModal('panelSettingsModal');
                 } else {
-                    const errBox = document.getElementById('editorErrorBox');
-                    errBox.className = "p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-mono mb-4 overflow-y-auto max-h-24";
-                    errBox.innerText = "Sing-Box 验证（dry-run）不通过！核心拒绝接受此配置，报错详情：\\n\\n" + result.error;
+                    showToast("更新失败: " + result.error);
                 }
             } catch(e) {
-                showToast("连接后端发生异常，请检查 Dashboard 是否在线");
+                showToast("连接异常（可能服务已经热重启，请稍后刷新重试）");
             }
         }
 
@@ -644,11 +1320,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Unauthorized Access")
 
     def do_GET(self):
-        if not self.check_auth():
-            return
-            
         parsed_url = urllib.parse.urlparse(self.path)
         path = parsed_url.path
+
+        # 1. Reality generation API (No authentication needed for CLI, or authenticate if preferred)
+        # We allow it to run quickly
+        if path == '/api/generate-reality':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            try:
+                # Executes 'sing-box generate reality-keypair'
+                out = subprocess.check_output([SB_BIN, "generate", "reality-keypair"], stderr=subprocess.STDOUT).decode('utf-8')
+                lines = out.strip().split('\n')
+                priv = lines[0].split(': ')[1].strip()
+                pub = lines[1].split(': ')[1].strip()
+                res = {"success": True, "private_key": priv, "public_key": pub}
+            except Exception as e:
+                res = {"success": False, "error": str(e)}
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        if not self.check_auth():
+            return
 
         if path in ['/', '/ui', '/ui/']:
             # 渲染高颜值主页面
@@ -665,6 +1359,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(config_data).encode('utf-8'))
+            return
+
+        elif path == '/api/creds':
+            creds_data = read_json_file(CREDS_FILE)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(creds_data).encode('utf-8'))
             return
 
         elif path == '/api/status':
@@ -697,7 +1399,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             # sing-box 是否处于运行状态
             sb_active = False
             try:
-                # 自动判别 systemd 还是 openrc
                 if os.path.exists("/usr/sbin/rc-service") or os.path.exists("/sbin/rc-service"):
                     status_raw = subprocess.check_output("rc-service sing-box status", shell=True).decode()
                     if "started" in status_raw:
@@ -734,7 +1435,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.wfile.write(logs.encode('utf-8'))
             return
 
-        # 404
         self.send_response(404)
         self.end_headers()
         self.wfile.write(b"Not Found")
@@ -785,7 +1485,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         pass
                     self.send_json_response({"success": True})
                 else:
-                    self.send_json_response({"success": False, "error": "写入最终 config.json 文件权限受阻"})
+                    self.send_json_response({"success": False, "error": "写入config.json文件权限受阻"})
             else:
                 # 返回失败和具体的错误堆栈
                 err_msg = stderr.decode('utf-8', errors='ignore') or stdout.decode('utf-8', errors='ignore') or "原因未知"
@@ -793,6 +1493,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+            return
+
+        elif path == '/api/creds':
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                if write_json_file(CREDS_FILE, payload):
+                    self.send_json_response({"success": True})
+                    # Schedule restart in background
+                    subprocess.Popen("sleep 2 && (rc-service sing-box-dashboard restart || systemctl restart sing-box-dashboard)", shell=True)
+                else:
+                    self.send_json_response({"success": False, "error": "写入凭证文件失败"})
+            except Exception as e:
+                self.send_json_response({"success": False, "error": str(e)})
             return
 
         elif path == '/api/action':
@@ -827,15 +1540,15 @@ def run_server():
     creds = read_json_file(CREDS_FILE)
     port = creds.get("port", 9527)
     
-    server_address = ('', port)
-    httpd = HTTPServer(server_address, DashboardHandler)
-    print(f"Starting Sing-Box Web Dashboard on port {port}...")
+    server_address = ('0.0.0.0', port)
     try:
+        httpd = HTTPServer(server_address, DashboardHandler)
+        print(f"Starting Sing-Box Web Dashboard on port {port}...")
         httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        httpd.server_close()
+    except Exception as e:
+        with open("/var/log/sing-box-dashboard-crash.log", "a") as f:
+            f.write(f"Crash: {str(e)}\n")
+        raise e
 
 if __name__ == '__main__':
     run_server()
@@ -1304,15 +2017,33 @@ EOF
 detect_os
 install_deps
 deploy_web_ui() {
-    # 如果以前有旧的 ui 文件夹则保留或新建
-    mkdir -p "$SB_UI_DIR"
+    # 如果以前有旧原生 ui 目录则保留，在这里我们直接初始化 config.json 默认不配置抢占
+    if [ ! -f "$SB_CONFIG" ]; then
+        # 生成一个无端口冲突的最简基础合规配置文件
+        cat > "$SB_CONFIG" <<EOF
+{
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": true
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct-out"
+    }
+  ]
 }
-deploy_web_ui ""
+EOF
+    fi
+}
+deploy_web_ui
 deploy_dashboard_service
 setup_system_service
 create_sb_shortcut
 
 # 最后直接调起一次面板
-success "Web 自托管控制面板服务安装并重构成功！"
+success "Web 表单自托管控制面板服务安装并重构成功！"
 sleep 1
 exec "$SB_SHORTCUT"
